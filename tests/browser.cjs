@@ -25,6 +25,7 @@ const screenshotDir = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../
     const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('komunalochka.lviv.v1')));
     const click = selector => page.locator(selector).click();
     assert.equal(await page.locator('.service-card').count(), 5);
+    assert.match(await page.locator('#period-display').textContent(), /[а-яіїєґ]/i);
     assert.equal((await saved()).profiles[0].history.length, 0);
 
     await click('.nav-item[data-view="history"]');
@@ -88,6 +89,7 @@ const screenshotDir = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../
     assert.match(await page.locator('#print-receipt').textContent(), /1\s?590,50/);
     await click('[data-action="theme"]');
     await fs.mkdir(screenshotDir, { recursive: true });
+    await page.evaluate(() => document.querySelector('#toast').classList.remove('visible'));
     await page.screenshot({ path: path.join(screenshotDir, 'desktop.png'), fullPage: true });
     for (const width of [390, 768]) {
       await page.setViewportSize({ width, height: 844 });

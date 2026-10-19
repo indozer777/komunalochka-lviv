@@ -256,6 +256,7 @@
   }
   function renderDashboard() {
     $('#period').value = state.period;
+    $('#period-display').textContent = monthLabel(state.period);
     $('#active-profile-name').textContent = profile().name;
     $('#active-profile-address').textContent = profile().address ? `Львів · ${profile().address}` : 'Львів · основне помешкання';
     const outsideReferencePeriod = !profile().manual && (state.period < '2026-08' || state.period > '2026-10');
