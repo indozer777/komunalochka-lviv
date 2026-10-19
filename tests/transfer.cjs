@@ -19,10 +19,11 @@ const shots = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../test-res
     await context.addInitScript(() => {
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.__copiedTransfer = value; } } });
     });
+    await require('./premium-fixture.cjs')(context);
     const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
     const click = selector => page.locator(selector).click();
     const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('komunalochka.lviv.v1')));
-    await page.goto(target);
+    await page.goto(target); await page.waitForFunction(() => window.KomunalPremium?.getState().ready);
     await click('.nav-item[data-view="transfer"]');
     assert.equal(await page.locator('#readings-transfer-form').isVisible(), true); // Available without Premium.
     await click('#readings-transfer-form button[type="submit"]');
@@ -85,7 +86,7 @@ const shots = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../test-res
       await page.screenshot({ path: path.join(shots, `transfer-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.locator('.nav-item[data-view="profiles"]').click(); await page.fill('#activation-key', 'LVIV-2026-HOME-7K2P'); await click('#premium-form button');
+    await page.locator('.nav-item[data-view="profiles"]').click(); await page.fill('#activation-key', 'TEST-ONLY-FREE-CODE'); await click('#premium-form button');
     await click('.nav-item[data-view="profiles"]'); await click('[data-action="add-profile"]'); await page.fill('#profile-name', 'Інша оселя'); await click('#profile-form button');
     await click('.nav-item[data-view="transfer"]'); assert.equal(await page.inputValue('#transfer-account'), '');
     assert.equal(await page.locator('.transfer-journal-row').count(), 0);

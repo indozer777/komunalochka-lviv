@@ -8,6 +8,7 @@
   <title>КомуналОчка — комунальні під контролем</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
+  <script src="premium.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -32,7 +33,7 @@
     <div class="workspace">
       <header class="topbar">
         <div class="topbar-caption"><span data-icon="home"></span><span>Мій домашній простір</span></div>
-        <div class="topbar-right"><span class="location"><span data-icon="pin"></span>Львів, Україна</span><button class="theme-toggle icon-button" data-action="theme" aria-label="Темна тема Premium" title="Темна тема Premium"><span data-icon="moon"></span></button><span class="avatar" aria-label="Мій профіль">МД</span></div>
+        <div class="topbar-right"><span class="location"><span data-icon="pin"></span>Львів, Україна</span><button class="theme-toggle icon-button" data-action="theme" aria-label="Темна тема Premium" title="Темна тема Premium"><span data-icon="moon"></span></button><button id="account-button" class="account-button" data-action="premium">Увійти</button></div>
       </header>
       <main id="main" tabindex="-1">
         <div id="storage-warning" class="notice warning" hidden></div>
@@ -58,7 +59,7 @@
       </main>
     </div>
   </div>
-  <dialog id="premium-dialog" class="modal premium-modal" aria-labelledby="premium-title"><button class="modal-close icon-button" data-close aria-label="Закрити"><span data-icon="close"></span></button><div class="premium-modal-icon" data-icon="spark"></div><span class="eyebrow">КОМУНАЛОЧКА PREMIUM</span><h2 id="premium-title">Ваш дім може більше.</h2><p class="modal-intro">Усе для уважного ставлення до домашнього бюджету.</p><div class="premium-features"><span><i data-icon="chart"></i>Історія та графіки витрат</span><span><i data-icon="home"></i>До 5 помешкань</span><span><i data-icon="receipt"></i>Квитанції для друку в PDF</span><span><i data-icon="leaf"></i>Особисті поради з економії</span><span><i data-icon="moon"></i>Затишна темна тема</span><span><i data-icon="download"></i>Резервна копія даних JSON</span></div><form id="premium-form"><label for="activation-key">Ваш ключ активації</label><input id="activation-key" class="key-input" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="19" autocomplete="off" spellcheck="false" required aria-describedby="key-feedback"><p id="key-feedback" class="form-feedback" role="status"></p><button class="button primary full" type="submit">Активувати Premium <span data-icon="spark"></span></button></form><p class="fine-print">Демонстраційна активація без оплати. Приклади ключів — у README проєкту.</p></dialog>
+  <dialog id="premium-dialog" class="modal premium-modal" aria-labelledby="premium-title"><button class="modal-close icon-button" data-close aria-label="Закрити"><span data-icon="close"></span></button><div class="premium-modal-icon" data-icon="spark"></div><span class="eyebrow">КОМУНАЛОЧКА PREMIUM</span><h2 id="premium-title">Ваш дім може більше.</h2><p class="modal-intro">Усе для уважного ставлення до домашнього бюджету.</p><div class="premium-features"><span><i data-icon="chart"></i>Історія та графіки витрат</span><span><i data-icon="home"></i>До 5 помешкань</span><span><i data-icon="receipt"></i>Квитанції для друку в PDF</span><span><i data-icon="leaf"></i>Особисті поради з економії</span><span><i data-icon="moon"></i>Затишна темна тема</span><span><i data-icon="download"></i>Резервна копія даних JSON</span></div><div id="premium-content" aria-live="polite"><p class="premium-loading">Перевіряємо акаунт…</p></div><p class="fine-print">Безкоштовний доступ за промокодом або схваленою заявкою. Статус прив’язаний до акаунта; ваші показники залишаються у браузері.</p></dialog>
   <dialog id="general-dialog" class="modal" aria-labelledby="general-title"><button class="modal-close icon-button" data-close aria-label="Закрити"><span data-icon="close"></span></button><div id="general-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <section id="print-receipt" aria-label="Квитанція"></section>

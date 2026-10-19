@@ -4,7 +4,6 @@
 
   const STORAGE_KEY = 'komunalochka.lviv.v1';
   const MAX_VALUE = 100000000;
-  const KEYS = Object.freeze(['LVIV-2026-HOME-7K2P', 'KOMU-NALO-CHKA-9X4Q', 'TEPL-ODIM-LVIV-3R8N', 'ECOH-OME2-026L-6W5M']);
   const RATE_KEYS = ['gas', 'delivery', 'water', 'electricityDay', 'electricityNight', 'trash'];
   const SERVICES = [
     { id: 'gas', name: 'Газ', provider: 'ГК «Нафтогаз України»', icon: 'flame', unit: 'м³' },
@@ -126,7 +125,7 @@
     if (integer && !Number.isInteger(n)) return { value: null, error: 'Кількість мешканців має бути цілою' };
     return { value: n, error: '' };
   }
-  function validateKey(raw) { return /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/.test(String(raw).trim().toUpperCase()) && KEYS.includes(String(raw).trim().toUpperCase()); }
+
   function currentPeriod() {
     const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
     return `${parts.find(p => p.type === 'year').value}-${parts.find(p => p.type === 'month').value}`;
@@ -216,7 +215,7 @@
       return { id: p.id, name: p.name.trim(), address: p.address, manual: p.manual, rates: sanitizeRates(p.rates), drafts, history, transferService, ...transfers };
     });
     if (!ids.has(raw.activeId)) throw new Error('Помешкання не знайдено');
-    return { version: 1, period: raw.period, activeId: raw.activeId, profiles, activationKey: validateKey(raw.activationKey) ? raw.activationKey.trim().toUpperCase() : '', theme: raw.theme === 'dark' ? 'dark' : 'light', lastFetch: typeof raw.lastFetch === 'string' && Number.isFinite(Date.parse(raw.lastFetch)) ? raw.lastFetch : null };
+    return { version: 1, period: raw.period, activeId: raw.activeId, profiles, activationKey: '', theme: raw.theme === 'dark' ? 'dark' : 'light', lastFetch: typeof raw.lastFetch === 'string' && Number.isFinite(Date.parse(raw.lastFetch)) ? raw.lastFetch : null };
   }
 
   // Conservative provider adapters. Ambiguous, unlabeled or wholesale prices are rejected.
@@ -240,7 +239,7 @@
     }
     return null;
   }
-  const Core = { STORAGE_KEY, KEYS, SERVICES, REFERENCE_RATES, GAS_CHANNELS, TRANSFER_SERVICES, parseNumber, validateKey, calculate, makeDraft, makeState, normalizeState, parseProviderText, validPeriod, escapeHTML, roundMoney, makeGasTransfer, prepareGasTransfer, gasTransferText, normalizeGasTransfer, validReadingDate, makeTransfer, prepareTransfer, normalizeTransfer, transferText, transferReadingSummary };
+  const Core = { STORAGE_KEY, SERVICES, REFERENCE_RATES, GAS_CHANNELS, TRANSFER_SERVICES, parseNumber, calculate, makeDraft, makeState, normalizeState, parseProviderText, validPeriod, escapeHTML, roundMoney, makeGasTransfer, prepareGasTransfer, gasTransferText, normalizeGasTransfer, validReadingDate, makeTransfer, prepareTransfer, normalizeTransfer, transferText, transferReadingSummary };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core;
   if (typeof document === 'undefined') return;
   window.KomunalCore = Core;
@@ -280,7 +279,7 @@
   let state, storageOK = true, storageError = '', currentView = 'dashboard', fetchBusy = false, candidates = {}, fetchResults = [], chartMetric = 'total', toastTimer, dialogReturnFocus;
   try { const raw = localStorage.getItem(STORAGE_KEY); state = raw ? normalizeState(JSON.parse(raw)) : makeState(); }
   catch (error) { state = makeState(); storageOK = false; storageError = 'Збережені дані недоступні або пошкоджені. Оригінал не перезаписано. Завантажте резервну копію через «Мої помешкання» або дозвольте браузеру зберігати дані.'; }
-  const premium = () => validateKey(state.activationKey);
+  const premium = () => Boolean(window.KomunalPremium?.isActive());
   const profile = () => state.profiles.find(p => p.id === state.activeId);
   const draft = () => { const p = profile(); if (!p.drafts[state.period]) p.drafts[state.period] = makeDraft(); return p.drafts[state.period]; };
   const rates = () => profile().manual ? profile().rates : REFERENCE_RATES;
@@ -307,7 +306,8 @@
     if (!alreadyOpen) dialog.showModal();
     else (dialog.querySelector('#general-content input, #general-content button, #general-content a') || dialog.querySelector('[data-close]')).focus({ preventScroll: true });
   }
-  function requirePremium(action) { if (!premium()) { $('#key-feedback').textContent = ''; showDialog('#premium-dialog'); return; } action(); }
+  function openPremium() { window.KomunalPremium?.render(); showDialog('#premium-dialog'); }
+  function requirePremium(action) { if (!premium()) { openPremium(); return; } action(); }
 
   function field(key, label, placeholder, value = draft()[key]) {
     return `<div class="field"><label for="${key}">${label}</label><input id="${key}" data-field="${key}" type="text" inputmode="${key === 'residents' ? 'numeric' : 'decimal'}" maxlength="24" value="${escapeHTML(value)}" placeholder="${placeholder}" autocomplete="off" aria-describedby="error-${key}"><div id="error-${key}" class="field-error" aria-live="polite"></div></div>`;
@@ -569,8 +569,6 @@
       try {
         if (file.size > 5 * 1024 * 1024) throw new Error('Файл більший за 5 МБ');
         const imported = normalizeState(JSON.parse(await file.text()));
-        // Keep the currently active demo license when importing an older free backup.
-        if (premium()) imported.activationKey = state.activationKey;
         closeDialog($('#general-dialog'));
         confirmAction('Замінити поточні дані?', `Перевірено: ${imported.profiles.length} помешкань. Поточні чернетки та історія будуть замінені даними з копії.`, () => { state = imported; persist({ force: true }); applyTheme(); renderDashboard(); switchView('profiles'); toast(storageOK ? 'Резервну копію відновлено' : 'Копію відкрито лише в пам’яті вкладки'); }, 'Відновити');
       } catch (error) { $('#import-feedback').textContent = `Копію не завантажено: ${error instanceof SyntaxError ? 'файл не містить коректний JSON' : error.message}`; }
@@ -579,10 +577,12 @@
   function applyTheme() {
     document.body.dataset.theme = premium() ? state.theme : 'light';
     document.querySelectorAll('.tiny-lock').forEach(el => { el.hidden = premium(); });
-    if (premium()) { $('.premium-teaser h3').innerHTML = 'Ваш Premium<br>уже з вами.'; $('.premium-teaser p').innerHTML = 'Більше можливостей<br>для вашого домашнього спокою.'; $('.premium-button').innerHTML = 'Premium активовано ' + icon('check'); }
+    $('.premium-teaser h3').innerHTML = premium() ? 'Ваш Premium<br>уже з вами.' : 'Більше спокою.<br>Більше можливостей.';
+    $('.premium-teaser p').innerHTML = premium() ? 'Більше можливостей<br>для вашого домашнього спокою.' : 'Історія, кілька помешкань<br>та квитанції з Premium.';
+    $('.premium-button').innerHTML = premium() ? 'Ваш Premium ' + icon('check') : 'Отримати Premium ' + icon('spark');
   }
   function help() {
-    generalDialog(`<h2 id="general-title">Рахунки без зайвих турбот</h2><p>КомуналОчка допомагає мешканцям Львова вести власний облік.</p><div class="help-steps"><div><h3>01 · Звірте тарифи</h3><p>Перевірте ставки постачальників. Для сміття обов’язково вкажіть тариф перевізника. Усі ставки вводяться з ПДВ.</p></div><div><h3>02 · Внесіть показники</h3><p>Оберіть місяць, додайте попередні та поточні показники. Для доставки газу візьміть річну замовлену потужність з рахунку, для сміття — кількість мешканців. Непотрібну послугу можна вимкнути.</p></div><div><h3>03 · Збережіть місяць</h3><p>Чернетка зберігається автоматично. Кнопка «Зберегти розрахунок» створює місячний запис. Premium відкриває перегляд історії, кілька адрес та друк у PDF.</p></div></div><div class="notice">Дані зберігаються в localStorage цього браузера. Облікового запису та приймання платежів немає. Зміна домену чи очищення сховища приховає дані; переносьте їх через JSON-копію.</div>`);
+    generalDialog(`<h2 id="general-title">Рахунки без зайвих турбот</h2><p>КомуналОчка допомагає мешканцям Львова вести власний облік.</p><div class="help-steps"><div><h3>01 · Звірте тарифи</h3><p>Перевірте ставки постачальників. Для сміття обов’язково вкажіть тариф перевізника. Усі ставки вводяться з ПДВ.</p></div><div><h3>02 · Внесіть показники</h3><p>Оберіть місяць, додайте попередні та поточні показники. Для доставки газу візьміть річну замовлену потужність з рахунку, для сміття — кількість мешканців. Непотрібну послугу можна вимкнути.</p></div><div><h3>03 · Збережіть місяць</h3><p>Чернетка зберігається автоматично. Кнопка «Зберегти розрахунок» створює місячний запис. Premium відкриває перегляд історії, кілька адрес та друк у PDF.</p></div></div><div class="notice">Дані зберігаються в localStorage цього браузера. Акаунт використовується лише для Premium; показники не надсилаються на сервер. Доступ безкоштовний за промокодом або заявкою. Зміна домену чи очищення сховища приховає дані; переносьте їх через JSON-копію.</div>`);
   }
 
   document.addEventListener('input', e => {
@@ -648,7 +648,7 @@
     if (button.dataset.historyPrint) { requirePremium(() => printReceipt(profile().history.find(h => h.period === button.dataset.historyPrint))); return; }
     if (button.dataset.historyDelete) { requirePremium(() => confirmAction('Видалити місяць з історії?', 'Збережений розрахунок буде видалено. Чернетка місяця залишиться.', () => { profile().history = profile().history.filter(h => h.period !== button.dataset.historyDelete); persist(); renderHistory(); }, 'Видалити')); return; }
     const actions = {
-      premium: () => premium() ? toast('Premium уже активовано. Усі можливості доступні.') : showDialog('#premium-dialog'),
+      premium: openPremium,
       theme: () => requirePremium(() => { state.theme = state.theme === 'light' ? 'dark' : 'light'; applyTheme(); persist(); }),
       profiles: () => switchView('profiles', { focus: true }),
       'add-profile': () => requirePremium(() => profileForm()),
@@ -660,11 +660,12 @@
     };
     actions[button.dataset.action]?.();
   });
-  $('#premium-form').addEventListener('submit', e => {
-    e.preventDefault(); const key = $('#activation-key').value.trim().toUpperCase();
-    if (!validateKey(key)) { $('#key-feedback').textContent = 'Ключ не знайдено. Перевірте символи та формат XXXX-XXXX-XXXX-XXXX.'; $('#activation-key').setAttribute('aria-invalid', 'true'); return; }
-    state.activationKey = key; persist(); applyTheme(); $('#activation-key').setAttribute('aria-invalid', 'false'); closeDialog($('#premium-dialog')); toast('Ласкаво просимо до Premium! Усі можливості відкрито.');
+  window.addEventListener('komunal-premium-change', () => {
+    applyTheme();
+    if (!premium() && ['history', 'profiles'].includes(currentView)) switchView('dashboard');
+    if (premium() && ['history', 'profiles'].includes(location.hash.slice(1))) switchView(location.hash.slice(1));
   });
+  window.addEventListener('komunal-premium-granted', () => { if ($('#premium-dialog').open) closeDialog($('#premium-dialog')); toast('Premium активовано для вашого акаунта!'); });
   document.querySelectorAll('dialog').forEach(dialog => {
     dialog.addEventListener('click', e => { if (e.target === dialog) { const r = dialog.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeDialog(dialog); } });
   });
@@ -675,8 +676,11 @@
   window.addEventListener('hashchange', () => switchView(location.hash.slice(1)));
   hydrateIcons(); applyTheme(); renderDashboard();
   $('#copyright-year').textContent = new Date().getFullYear();
-  switchView(['dashboard', 'tariffs', 'history', 'profiles', 'transfer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard');
+  const initialView = ['dashboard', 'tariffs', 'history', 'profiles', 'transfer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
+  if (['history', 'profiles'].includes(initialView) && !window.KomunalPremium?.getState().ready) window.KomunalPremium.refresh().then(() => switchView(initialView));
+  else switchView(initialView);
   // An immediate write probes actual quota/access instead of displaying false "saved" status.
   persist();
   if (!state.lastFetch) refreshRates({ silent: true });
+  if (new URLSearchParams(location.search).has('premium')) { openPremium(); history.replaceState(null, '', location.pathname + location.hash); }
 })();

@@ -1,10 +1,7 @@
-import { mkdir, copyFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
-
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
-await mkdir(join(root, 'dist'), { recursive: true });
-for (const file of ['index.html', 'styles.css', 'app.js', 'favicon.svg']) {
-  await copyFile(join(root, file), join(root, 'dist', file));
-}
-console.log('Статичний сайт готовий у dist/');
+await import('./prepare-assets.mjs');
+const root = fileURLToPath(new URL('../', import.meta.url));
+const result = spawnSync(process.execPath, [fileURLToPath(new URL('./run-framework.mjs', import.meta.url)), 'build'], { cwd: root, stdio: 'inherit' });
+if (result.error) throw result.error;
+process.exit(result.status ?? 1);

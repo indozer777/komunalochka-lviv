@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const core = require('../app.js');
+const core = require('./load-core.cjs');
 const rates = { ...core.REFERENCE_RATES, trash: '45' };
 function example() { return { ...core.makeDraft(), gasPrev: '1250', gasCurrent: '1278', waterPrev: '320', waterCurrent: '327', dayPrev: '4800', dayCurrent: '4960', nightPrev: '1200', nightCurrent: '1270', deliveryAnnual: '240', residents: '2', zone: 'dual' }; }
 
@@ -41,9 +41,10 @@ test('захист від переповнення грошових обчисл
   const d = example(); d.gasPrev = '0'; d.gasCurrent = '100000000';
   const r = core.calculate(d, { ...rates, gas: '100000000' }); assert.equal(r.complete, false); assert.equal(r.lines[0].amount, null); assert.ok(r.errors['amount-gas']);
 });
-test('чотири ключі активують Premium, довільні ключі відхиляються', () => {
-  assert.equal(core.KEYS.length, 4); for (const key of core.KEYS) { assert.equal(core.validateKey(key), true); assert.equal(core.validateKey(key.toLowerCase()), true); }
-  for (const key of ['AAAA-BBBB-CCCC-DDDD', 'LVIV2026HOME7K2P', '', core.KEYS[0] + 'A']) assert.equal(core.validateKey(key), false);
+test('імпорт старої копії не надає серверний Premium і не втрачає дані', () => {
+  const state = core.makeState(); state.activationKey = 'LVIV-2026-HOME-7K2P';
+  const restored = core.normalizeState(state);
+  assert.equal(restored.activationKey, ''); assert.equal(restored.profiles[0].id, state.profiles[0].id);
 });
 test('імпорт відкидає некоректні схеми, дублікати, тарифи та зламану історію', () => {
   const state = core.makeState(); const p = state.profiles[0]; p.rates = rates; p.history.push({ period: state.period, savedAt: new Date().toISOString(), draft: example(), rates });

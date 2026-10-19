@@ -18,9 +18,10 @@ const screenshotDir = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../
       if (url.startsWith('https://lvivvodokanal.com.ua/')) return route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>Для споживачів, які не є суб’єктами господарювання (населення). Загальний тариф становить 60,00 грн/м³ з ПДВ.</body></html>' });
       return route.abort();
     });
+    await require('./premium-fixture.cjs')(context);
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(target);
+    await page.goto(target); await page.waitForFunction(() => window.KomunalPremium?.getState().ready);
     await page.waitForFunction(() => Boolean(localStorage.getItem('komunalochka.lviv.v1')));
     const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('komunalochka.lviv.v1')));
     const click = selector => page.locator(selector).click();
@@ -31,9 +32,9 @@ const screenshotDir = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../
     await click('.nav-item[data-view="history"]');
     assert.equal(await page.locator('#premium-dialog').isVisible(), true);
     await page.fill('#activation-key', 'AAAA-BBBB-CCCC-DDDD'); await click('#premium-form button');
-    assert.match(await page.locator('#key-feedback').textContent(), /Ключ не знайдено/);
-    await page.fill('#activation-key', 'LVIV-2026-HOME-7K2P'); await click('#premium-form button');
-    assert.equal(await page.locator('#premium-dialog').isVisible(), false);
+    assert.match(await page.locator('#key-feedback').textContent(), /Промокод недоступний/);
+    await page.fill('#activation-key', 'TEST-ONLY-FREE-CODE'); await click('#premium-form button');
+    await page.waitForSelector('#premium-dialog', { state: 'hidden' });
 
     await click('[data-action="demo"]'); await click('#confirm-action');
     assert.equal(await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('komunalochka.lviv.v1')), p = s.profiles[0]; return KomunalCore.calculate(p.drafts[s.period], p.rates).total; }), 1590.5);
@@ -72,7 +73,7 @@ const screenshotDir = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../
     assert.equal(await page.locator('.profile-list тест').count(), 0);
     await click(`[data-profile-select="${state.profiles[0].id}"]`);
     await click('[data-action="theme"]'); assert.equal(await page.locator('body').getAttribute('data-theme'), 'dark');
-    await page.reload(); assert.equal(await page.locator('body').getAttribute('data-theme'), 'dark'); assert.equal((await saved()).profiles.length, 2);
+    await page.reload(); await page.waitForFunction(() => window.KomunalPremium?.isActive()); assert.equal(await page.locator('body').getAttribute('data-theme'), 'dark'); assert.equal((await saved()).profiles.length, 2);
 
     const backupEvent = page.waitForEvent('download'); await click('[data-action="export"]'); const backup = await backupEvent;
     assert.match(backup.suggestedFilename(), /komunalochka-backup/);

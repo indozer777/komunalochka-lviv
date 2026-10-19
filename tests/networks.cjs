@@ -4,7 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
-const core = require('../app.js');
+const core = require('./load-core.cjs');
 const target = process.env.TEST_URL || pathToFileURL(path.resolve(__dirname, '../index.html')).href;
 const shots = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../test-results/networks');
 
