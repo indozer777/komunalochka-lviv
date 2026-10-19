@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js';
       enabled = true;
       client.auth.onAuthStateChange((_event, session) => {
         sessionPresent = Boolean(session?.user);
+        if (session?.user?.email && !dialog?.open) email = session.user.email;
         // Never call another SDK method synchronously from this callback.
         setTimeout(signal, 0);
       });
@@ -46,13 +47,13 @@ import { createClient } from '@supabase/supabase-js';
   }
   function render() {
     if (!dialog) return;
-    const codeStep = stage === 'code';
-    $('#email-auth-content').innerHTML = `<span class="email-auth-kicker">КОМУНАЛОЧКА · ВАШ АКАУНТ</span><h2 id="email-auth-title">${codeStep ? 'Перевірте вашу пошту' : 'Увійдіть за допомогою пошти'}</h2>
-      <p class="email-auth-intro">${codeStep ? `Введіть 6 цифр із листа, який ми надіслали на <strong>${escape(email)}</strong>.` : 'Ми надішлемо вам одноразовий код. Пароль створювати не потрібно.'}</p>
+    const confirmed = stage === 'confirmed', codeStep = stage !== 'email';
+    $('#email-auth-content').innerHTML = `<span class="email-auth-kicker">КОМУНАЛОЧКА · ВАШ АКАУНТ</span><h2 id="email-auth-title">${confirmed ? 'Пошту підтверджено' : codeStep ? 'Перевірте вашу пошту' : 'Увійдіть за допомогою пошти'}</h2>
+      <p class="email-auth-intro">${confirmed ? `Пошта <strong>${escape(email)}</strong> уже підтверджена. Завантажте акаунт, щоб завершити вхід.` : codeStep ? `Введіть 6 цифр із листа, який ми надіслали на <strong>${escape(email)}</strong>.` : 'Ми надішлемо вам одноразовий код. Пароль створювати не потрібно.'}</p>
       <div class="email-auth-steps" aria-label="Кроки входу"><span ${!codeStep ? 'aria-current="step"' : ''}><b>1</b>Ваша пошта</span><span ${codeStep ? 'aria-current="step"' : ''}><b>2</b>Код із листа</span></div>
-      <form id="email-auth-form" novalidate>${codeStep ? '<label for="email-login-code">Код із листа</label><input id="email-login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" aria-describedby="email-auth-feedback" required>' : `<label for="email-login-address">Ваша електронна пошта</label><input id="email-login-address" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="Наприклад, imia@gmail.com" aria-describedby="email-auth-feedback" value="${escape(email)}" required>`}
-      <p id="email-auth-feedback" class="email-auth-feedback" role="status" aria-live="polite"></p><button type="submit" class="email-auth-primary">${codeStep ? 'Підтвердити код і увійти' : 'Отримати код на пошту'}</button></form>
-      ${codeStep ? '<button type="button" id="email-resend" class="email-auth-secondary">Надіслати код ще раз</button><button type="button" id="email-change" class="email-auth-link">Змінити адресу пошти</button><p class="email-auth-tip">Немає листа? Перевірте «Спам» і правильність адреси. Використовуйте код з останнього листа. Нікому його не повідомляйте.</p>' : '<p class="email-auth-tip">Якщо ви тут уперше, акаунт створиться після підтвердження пошти. Вхід зберігається в цьому браузері; на спільному пристрої натискайте «Вийти» після роботи.</p><details class="email-auth-legacy"><summary>Раніше входили через ChatGPT?</summary><p>Старий акаунт і його Premium залишаються доступними через попередній спосіб входу. Вхід поштою створює окремий акаунт; автоматичного об’єднання немає.</p><a href="/signin-with-chatgpt?return_to=%2F%3Fpremium%3D1" target="_top">Продовжити через ChatGPT ↗</a></details>'}
+      <form id="email-auth-form" novalidate>${confirmed ? '' : codeStep ? '<label for="email-login-code">Код із листа</label><input id="email-login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" aria-describedby="email-auth-feedback" required>' : `<label for="email-login-address">Ваша електронна пошта</label><input id="email-login-address" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="Наприклад, imia@gmail.com" aria-describedby="email-auth-feedback" value="${escape(email)}" required>`}
+      <p id="email-auth-feedback" class="email-auth-feedback" role="status" aria-live="polite"></p><button type="submit" class="email-auth-primary">${confirmed ? 'Завершити вхід' : codeStep ? 'Підтвердити код і увійти' : 'Отримати код на пошту'}</button></form>
+      ${confirmed ? '<button type="button" id="email-change" class="email-auth-link">Отримати новий код або змінити пошту</button>' : codeStep ? '<button type="button" id="email-resend" class="email-auth-secondary">Надіслати код ще раз</button><button type="button" id="email-change" class="email-auth-link">Змінити адресу пошти</button><p class="email-auth-tip">Немає листа? Перевірте «Спам» і правильність адреси. Використовуйте код з останнього листа. Нікому його не повідомляйте.</p>' : '<p class="email-auth-tip">Якщо ви тут уперше, акаунт створиться після підтвердження пошти. Вхід зберігається в цьому браузері; на спільному пристрої натискайте «Вийти» після роботи.</p><details class="email-auth-legacy"><summary>Раніше входили через ChatGPT?</summary><p>Старий акаунт і його Premium залишаються доступними через попередній спосіб входу. Вхід поштою створює окремий акаунт; автоматичного об’єднання немає.</p><a href="/signin-with-chatgpt?return_to=%2F%3Fpremium%3D1" target="_top">Продовжити через ChatGPT ↗</a></details>'}
       <p class="email-auth-local">Вхід використовується для акаунта та Premium. Ваші показники поки зберігаються лише в цьому браузері.</p>`;
     tick();
   }
@@ -74,7 +75,8 @@ import { createClient } from '@supabase/supabase-js';
         if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close();
       });
     }
-    operationVersion++; stage = 'email'; busy = false; render(); dialog.showModal(); $('#email-login-address').focus({ preventScroll: true });
+    operationVersion++; stage = sessionPresent ? 'confirmed' : 'email'; busy = false; render(); dialog.showModal();
+    ($('#email-login-address') || $('#email-auth-form button')).focus({ preventScroll: true });
     return true;
   }
   async function send(address = email) {
@@ -97,6 +99,16 @@ import { createClient } from '@supabase/supabase-js';
     const { data, error } = await client.auth.getSession();
     if (error) throw new Error('Не вдалося відновити вхід. Спробуйте увійти знову.');
     return data.session?.access_token ? { Authorization: 'Bearer ' + data.session.access_token } : {};
+  }
+  async function finishSignIn(ownsView) {
+    const result = await window.KomunalPremium?.refresh({ force: true });
+    if (!ownsView()) return;
+    if (result?.error || !result?.user) {
+      stage = 'confirmed'; render();
+      feedback('Пошту підтверджено, але акаунт поки не завантажився. Перевірте інтернет і натисніть «Завершити вхід». Повторно вводити цей код не потрібно.', true);
+      $('#email-auth-form button').focus(); return;
+    }
+    dialog.close(); $('#account-button')?.click();
   }
   document.addEventListener('click', event => {
     const login = event.target.closest('[data-email-login]');
@@ -124,15 +136,17 @@ import { createClient } from '@supabase/supabase-js';
     event.preventDefault(); if (busy || !client) return;
     const operation = ++operationVersion;
     const ownsView = () => operation === operationVersion && dialog.open;
-    const codeStep = stage === 'code', input = $(codeStep ? '#email-login-code' : '#email-login-address');
-    const value = input.value.trim();
-    if (codeStep ? !/^\d{6}$/.test(value) : !input.validity.valid || !value || value.length > 254) {
+    const confirmed = stage === 'confirmed', codeStep = stage === 'code', input = $(codeStep ? '#email-login-code' : '#email-login-address');
+    const value = input?.value.trim() || '';
+    if (!confirmed && (codeStep ? !/^\d{6}$/.test(value) : !input.validity.valid || !value || value.length > 254)) {
       feedback(codeStep ? 'Введіть усі 6 цифр із листа.' : 'Введіть пошту повністю, наприклад imia@gmail.com.', true); input.setAttribute('aria-invalid', 'true'); input.focus(); return;
     }
     const button = event.target.querySelector('button[type=submit]'), old = button.textContent;
-    busy = true; button.disabled = true; button.textContent = codeStep ? 'Перевіряємо код…' : 'Надсилаємо код…'; feedback(''); tick();
+    busy = true; button.disabled = true; button.textContent = confirmed ? 'Завантажуємо акаунт…' : codeStep ? 'Перевіряємо код…' : 'Надсилаємо код…'; feedback(''); tick();
     try {
-      if (!codeStep) {
+      if (confirmed) {
+        await finishSignIn(ownsView);
+      } else if (!codeStep) {
         email = value.toLowerCase();
         if (!remaining()) await send(email);
         if (!ownsView()) return;
@@ -141,14 +155,10 @@ import { createClient } from '@supabase/supabase-js';
         const { error } = await client.auth.verifyOtp({ email, token: value, type: 'email' });
         if (error) throw error;
         if (!ownsView()) return;
-        const result = await window.KomunalPremium?.refresh({ force: true });
-        if (!ownsView()) return;
-        if (result?.error || !result?.user) { feedback('Пошту підтверджено. Не вдалося завантажити акаунт — перевірте інтернет і спробуйте ще раз.', true); return; }
-        dialog.close();
-        // Return to the existing account/Premium view, with verified server state.
-        $('#account-button')?.click();
+        stage = 'confirmed';
+        await finishSignIn(ownsView);
       }
-    } catch (error) { if (ownsView()) { feedback(errorText(error, codeStep), true); input.setAttribute('aria-invalid', 'true'); } }
+    } catch (error) { if (ownsView()) { feedback(errorText(error, codeStep), true); input?.setAttribute('aria-invalid', 'true'); } }
     finally { if (operation !== operationVersion) return; busy = false; if (button.isConnected) { button.disabled = false; button.textContent = old; } tick(); }
   });
   setInterval(() => { if (dialog?.open && stage === 'code') tick(); }, 1000);

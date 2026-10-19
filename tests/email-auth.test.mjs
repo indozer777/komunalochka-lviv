@@ -19,7 +19,7 @@ test('native Sites identity is preserved; anonymous remains anonymous', async ()
 test('verified email identity is scoped to provider and cannot inherit a same-email native identity or admin role', async () => {
   let called = 0;
   const user = await resolveAccount(request('Bearer ' + token), { env, nativeUser, fetcher: async (url, options) => {
-    called++; assert.equal(url, env.SUPABASE_URL + '/auth/v1/user'); assert.equal(options.headers.apikey, env.SUPABASE_PUBLISHABLE_KEY); assert.equal(options.headers.Authorization, 'Bearer ' + token); assert.equal(options.redirect, 'error');
+    called++; assert.equal(url, env.SUPABASE_URL + '/auth/v1/user'); assert.equal(options.headers.apikey, env.SUPABASE_PUBLISHABLE_KEY); assert.equal(options.headers.Authorization, 'Bearer ' + token); assert.equal(options.redirect, 'manual');
     return Response.json({ ...identity, email: nativeUser.email, user_metadata: { role: 'admin' } });
   } });
   assert.equal(called, 1); assert.equal(user.userId, 'email:' + identity.id); assert.equal(user.authProvider, 'email');
@@ -40,5 +40,17 @@ test('rejected, expired or unconfirmed email tokens do not authenticate', async 
 test('provider outages, rate limiting and malformed replies fail closed with generic messages', async () => {
   for (const fetcher of [async () => { throw new Error('private provider failure'); }, async () => new Response('', { status: 429 }), async () => new Response('', { status: 503 }), async () => new Response('{invalid')]) {
     await assert.rejects(resolveAccount(request('Bearer ' + token), { env, fetcher }), error => error.status === 503 && !error.message.includes('private provider failure'));
+  }
+});
+test('provider redirects are rejected without following them or using the native owner identity', async () => {
+  for (const status of [301, 302, 303, 307, 308]) {
+    let calls = 0;
+    await assert.rejects(resolveAccount(request('Bearer ' + token), { env, nativeUser, fetcher: async (url, options) => {
+      calls++;
+      assert.equal(url, env.SUPABASE_URL + '/auth/v1/user');
+      assert.equal(options.redirect, 'manual');
+      return new Response(null, { status, headers: { Location: 'https://elsewhere.example.test' } });
+    } }), error => error instanceof EmailAuthError && error.status === 503);
+    assert.equal(calls, 1);
   }
 });

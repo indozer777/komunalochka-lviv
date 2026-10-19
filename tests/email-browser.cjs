@@ -14,7 +14,7 @@ const id = 'a38cec6b-7826-44de-bd5f-987b331ca50c';
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'uk-UA', reducedMotion: 'reduce' });
     await context.route('https://**/*', r => r.abort());
     await context.route('**/api/account/config', r => r.fulfill({ json: { enabled: true, url: 'https://email-fixture.supabase.co', publishableKey: 'sb_publishable_' + 'a'.repeat(32), otpLength: 6 } }));
-    let otpRequests = 0, verificationAttempts = 0, active = false, pendingRequest = null, verifiedEmail = null, lastToken = null;
+    let otpRequests = 0, verificationAttempts = 0, active = false, pendingRequest = null, verifiedEmail = null, lastToken = null, accountUnavailable = false;
     const user = () => ({ id, aud: 'authenticated', role: 'authenticated', email: verifiedEmail, email_confirmed_at: new Date().toISOString(), phone: '', app_metadata: { provider: 'email', providers: ['email'] }, user_metadata: {}, identities: [], created_at: new Date().toISOString() });
     await context.route('https://email-fixture.supabase.co/auth/v1/**', async route => {
       const req = route.request(), url = new URL(req.url()), body = req.postDataJSON();
@@ -34,6 +34,7 @@ const id = 'a38cec6b-7826-44de-bd5f-987b331ca50c';
     await context.route('**/api/premium/**', route => {
       const signedIn = verifiedEmail && route.request().headers().authorization === 'Bearer ' + lastToken;
       const p = new URL(route.request().url()).pathname;
+      if (signedIn && accountUnavailable) return route.fulfill({ status: 503, json: { error: 'Сервіс входу тимчасово зайнятий.' } });
       if (p.endsWith('/requests')) { assert(signedIn); pendingRequest = { id: 'email-qa', status: 'pending', message: route.request().postDataJSON().message, createdAt: Date.now(), note: '' }; }
       if (p.endsWith('/redeem')) { assert(signedIn); active = true; }
       return route.fulfill({ json: { user: signedIn ? { id: 'email:' + id, name: verifiedEmail, email: verifiedEmail } : null, authProvider: signedIn ? 'email' : null, hasSiteSession: false,
@@ -60,7 +61,13 @@ const id = 'a38cec6b-7826-44de-bd5f-987b331ca50c';
     await page.locator('#email-resend').click(); await page.waitForFunction(() => document.querySelector('#email-auth-feedback').textContent.includes('Новий код надіслано'));
     assert.equal(otpRequests, 2);
     await page.screenshot({ path: path.join(shots, 'email-code-mobile.png'), fullPage: false });
+    accountUnavailable = true;
     await page.fill('#email-login-code', '024681'); await page.locator('#email-auth-form button').click();
+    await page.getByRole('button', { name: 'Завершити вхід', exact: true }).waitFor();
+    assert.match(await page.locator('#email-auth-feedback').innerText(), /Повторно вводити цей код не потрібно/);
+    assert.equal(await page.locator('#email-login-code').count(), 0);
+    accountUnavailable = false;
+    await page.getByRole('button', { name: 'Завершити вхід', exact: true }).click();
     await page.waitForSelector('#email-auth-dialog', { state: 'hidden' });
     await page.waitForFunction(() => window.KomunalPremium.getState().authProvider === 'email');
     assert.equal(verificationAttempts, 2); assert.match(await page.locator('#premium-content').innerText(), /older@example.test/);

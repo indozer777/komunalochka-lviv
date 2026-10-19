@@ -29,10 +29,11 @@ export async function resolveAccount(request, { env = {}, nativeUser = null, fet
   if (!config.enabled) throw new EmailAuthError(503, 'Вхід поштою ще не налаштовано. Доступний чинний вхід через ChatGPT.');
   let response;
   try {
-    response = await fetcher(config.url + '/auth/v1/user', { method: 'GET', redirect: 'error',
+    // Workers supports manual redirects; never forward credentials to a redirect target.
+    response = await fetcher(config.url + '/auth/v1/user', { method: 'GET', redirect: 'manual',
       headers: { apikey: config.publishableKey, Authorization: 'Bearer ' + match[1] }, signal: AbortSignal.timeout(6000) });
   } catch { throw new EmailAuthError(503, 'Не вдалося перевірити акаунт. Перевірте з’єднання та спробуйте ще раз.'); }
-  if (response.status === 429 || response.status >= 500) throw new EmailAuthError(503, 'Сервіс входу тимчасово зайнятий. Спробуйте трохи пізніше.');
+  if ((response.status >= 300 && response.status < 400) || response.status === 429 || response.status >= 500) throw new EmailAuthError(503, 'Сервіс входу тимчасово зайнятий. Спробуйте трохи пізніше.');
   if (!response.ok) throw new EmailAuthError(401, 'Вхід завершився. Увійдіть знову за кодом із листа.');
   let user;
   try { user = await response.json(); } catch { throw new EmailAuthError(503, 'Сервіс входу повернув неповну відповідь. Спробуйте ще раз.'); }
