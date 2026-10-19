@@ -8,6 +8,7 @@
     "test": "node --test tests/core.test.cjs",
     "test:browser": "node tests/browser.cjs",
     "test:transfer": "node tests/transfer.cjs",
+    "test:networks": "node tests/networks.cjs",
     "build": "node scripts/build.mjs"
   },
   "engines": { "node": ">=20" }

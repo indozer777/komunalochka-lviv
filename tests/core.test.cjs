@@ -100,3 +100,36 @@ test('журнал не приймає статус прийняття від п
   record.confirmedAt = '2026-10-19T11:00:00.000Z'; assert.throws(() => core.normalizeGasTransfer(transfer));
   transfer.channel = '__proto__'; assert.throws(() => core.normalizeGasTransfer(transfer));
 });
+
+test('вода зберігає точний накопичений показник, рахунок і номер водоміра', () => {
+  const r = core.prepareTransfer({ ...transferExample(), service: 'water', channel: 'infolviv', account: '00012345', meterNumber: 'W-42', current: '1278,125' }, '2026-10-19');
+  assert.deepEqual(r.errors, {}); assert.equal(r.payload.current, '1278.125'); assert.equal(r.payload.account, '00012345'); assert.equal(r.payload.meterNumber, 'W-42');
+  assert.match(core.transferText(r.payload), /Поточний показник: 1278.125 м³/);
+  assert.equal(core.TRANSFER_SERVICES.water.channels.infolviv.url, 'https://infolviv.com.ua/');
+});
+test('електрика: два регістри не сумуються і не підміняються споживанням', () => {
+  const input = { ...transferExample(), service: 'electricity', channel: 'loe', account: '0012345678', previous: '4800', current: '4960', zone: 'dual', nightPrevious: '1200', nightCurrent: '1270' };
+  const r = core.prepareTransfer(input, '2026-10-19'); assert.deepEqual(r.errors, {});
+  assert.match(core.transferText(r.payload), /День · поточний: 4960 кВт·год/); assert.match(core.transferText(r.payload), /Ніч · поточний: 1270 кВт·год/);
+  assert.equal(core.transferReadingSummary(r.payload), 'День 4960 / ніч 1270 кВт·год');
+  assert.ok(core.prepareTransfer({ ...input, nightCurrent: '' }, '2026-10-19').errors.nightCurrent);
+  assert.ok(core.prepareTransfer({ ...input, nightCurrent: '1100' }, '2026-10-19').errors.nightCurrent);
+  assert.ok(core.prepareTransfer({ ...input, current: '4960.2' }, '2026-10-19').errors.current);
+  const single = core.prepareTransfer({ ...input, zone: 'single', nightCurrent: 'wrong' }, '2026-10-19'); assert.equal(single.payload.nightCurrent, ''); assert.doesNotMatch(core.transferText(single.payload), /Ніч/);
+});
+test('міграція газового журналу до трьох послуг зберігає реквізити та власні підтвердження', () => {
+  const state = core.makeState(), p = state.profiles[0]; delete p.waterTransfer; delete p.electricityTransfer; delete p.transferService; delete p.gasTransfer.meterNumber;
+  p.gasTransfer.accounts.grmu = '0900123456';
+  p.gasTransfer.records.push({ id: 'legacy-gas', status: 'confirmed-by-user', createdAt: '2026-10-19T12:00:00.000Z', openedAt: '2026-10-19T12:01:00.000Z', confirmedAt: '2026-10-19T12:02:00.000Z', confirmationRef: 'Власна стара примітка', payload: transferExample() });
+  const restored = core.normalizeState(state).profiles[0];
+  assert.equal(restored.gasTransfer.records[0].payload.service, 'gas'); assert.equal(restored.gasTransfer.records[0].status, 'confirmed-by-user'); assert.equal(restored.gasTransfer.records[0].confirmationRef, 'Власна стара примітка');
+  assert.equal(restored.gasTransfer.accounts.grmu, '0900123456'); assert.deepEqual(restored.waterTransfer, core.makeTransfer('water')); assert.deepEqual(restored.electricityTransfer, core.makeTransfer('electricity'));
+});
+test('імпорт відхиляє змішані послуги, дублікати ID й невідомі напрямки', () => {
+  const state = core.makeState(), p = state.profiles[0], water = core.prepareTransfer({ ...transferExample(), service: 'water', channel: 'infolviv', account: '1234' }, '2026-10-19').payload;
+  const record = { id: 'same-id', status: 'prepared', createdAt: '2026-10-19T12:00:00.000Z', openedAt: null, confirmedAt: null, confirmationRef: '', payload: water };
+  p.waterTransfer.records.push(record); assert.equal(core.normalizeState(state).profiles[0].waterTransfer.records.length, 1);
+  p.gasTransfer.records.push({ ...record, payload: core.prepareGasTransfer(transferExample(), '2026-10-19').payload }); assert.throws(() => core.normalizeState(state), /Повторний ID/);
+  p.gasTransfer.records = []; p.waterTransfer.records[0].payload = { ...water, service: 'gas' }; assert.throws(() => core.normalizeState(state), /Послуга/);
+  assert.equal(core.prepareTransfer({ ...transferExample(), service: 'trash' }, '2026-10-19').payload, null);
+});

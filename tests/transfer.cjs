@@ -24,15 +24,15 @@ const shots = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../test-res
     const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('komunalochka.lviv.v1')));
     await page.goto(target);
     await click('.nav-item[data-view="transfer"]');
-    assert.equal(await page.locator('#gas-transfer-form').isVisible(), true); // Available without Premium.
-    await click('#gas-transfer-form button[type="submit"]');
+    assert.equal(await page.locator('#readings-transfer-form').isVisible(), true); // Available without Premium.
+    await click('#readings-transfer-form button[type="submit"]');
     assert.match(await page.locator('#transfer-error-account').textContent(), /10 цифр/);
     assert.match(await page.locator('#transfer-error-current').textContent(), /цілі м³/);
     await page.fill('#transfer-account', '0900123456');
     await page.fill('#transfer-previous', '1250'); await page.fill('#transfer-current', '1278,1');
-    await click('#gas-transfer-form button[type="submit"]'); assert.equal((await saved()).profiles[0].gasTransfer.records.length, 0);
+    await click('#readings-transfer-form button[type="submit"]'); assert.equal((await saved()).profiles[0].gasTransfer.records.length, 0);
     await page.fill('#transfer-current', '1278');
-    await click('#gas-transfer-form button[type="submit"]');
+    await click('#readings-transfer-form button[type="submit"]');
     let state = await saved(), transfer = state.profiles[0].gasTransfer;
     assert.equal(transfer.records.length, 1); assert.equal(transfer.records[0].status, 'prepared');
     assert.equal(await page.locator('#transfer-confirm-button').isDisabled(), true);
@@ -46,7 +46,7 @@ const shots = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../test-res
     assert.equal(await page.locator('#transfer-confirm-button').isDisabled(), false);
     assert.equal((await saved()).profiles[0].gasTransfer.records[0].confirmedAt, null);
     await click('#general-dialog [data-close]');
-    await click('#gas-transfer-form button[type="submit"]'); assert.equal((await saved()).profiles[0].gasTransfer.records.length, 1); // No duplicate.
+    await click('#readings-transfer-form button[type="submit"]'); assert.equal((await saved()).profiles[0].gasTransfer.records.length, 1); // No duplicate.
     await click('#general-dialog [data-close]');
     await page.fill('#transfer-current', '1279');
     await click('[data-transfer-record]'); await click('[data-transfer-copy="current"]');
@@ -61,13 +61,13 @@ const shots = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../test-res
     await click('[data-transfer-record]'); assert.match(await page.locator('.transfer-confirmed-note').textContent(), /<примітка>/);
     assert.equal(await page.locator('#general-content примітка').count(), 0); await click('#general-dialog [data-close]');
 
-    await click('#gas-transfer-form button[type="submit"]'); assert.equal((await saved()).profiles[0].gasTransfer.records.length, 2);
+    await click('#readings-transfer-form button[type="submit"]'); assert.equal((await saved()).profiles[0].gasTransfer.records.length, 2);
     await click('#general-dialog [data-close]');
     await page.selectOption('#transfer-channel', 'naftogaz'); assert.equal(await page.inputValue('#transfer-account'), '');
     await page.fill('#transfer-account', '123456789');
-    await click('#gas-transfer-form button[type="submit"]'); assert.match(await page.locator('#transfer-error-phone').textContent(), /380/);
+    await click('#readings-transfer-form button[type="submit"]'); assert.match(await page.locator('#transfer-error-phone').textContent(), /380/);
     await page.fill('#transfer-phone', '0671234567'); await page.fill('#transfer-surnamePrefix', 'іва');
-    await click('#gas-transfer-form button[type="submit"]');
+    await click('#readings-transfer-form button[type="submit"]');
     state = await saved(); assert.equal(state.profiles[0].gasTransfer.records.length, 3);
     assert.equal(state.profiles[0].gasTransfer.records[2].payload.phone, '+380671234567');
     assert.equal(await page.locator('[data-transfer-open]').getAttribute('href'), 'https://gas.ua/uk/indicators');

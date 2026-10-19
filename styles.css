@@ -32,15 +32,15 @@ body[data-theme=dark] .secondary{color:#afbed8}
 .transfer-layout .panel-heading h2{display:flex;align-items:center;gap:8px;font-size:15px}
 .transfer-layout .panel-heading h2 svg{width:19px;height:19px;color:var(--gas)}
 .transfer-layout .pill{font-size:6px;letter-spacing:.7px;background:var(--soft-blue);border-color:var(--line)}
-#gas-transfer-form>label{margin-bottom:7px}
-#gas-transfer-form>select{font-size:12px}
+#readings-transfer-form>label{margin-bottom:7px}
+#readings-transfer-form>select{font-size:12px}
 .transfer-channel-help{margin:10px 0 22px!important;font-size:10px!important}
 .transfer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 17px}
 .transfer-field label{font-size:10px;margin:0 0 7px}
 .transfer-field input{font-size:13px}
 .transfer-field small{display:block;font-size:9px;color:var(--muted);line-height:1.7;margin-top:6px}
 .transfer-field .field-error{margin-top:5px;min-height:14px}
-.transfer-readings-note{align-self:center;font-size:10px;color:var(--muted);line-height:1.9;border-left:2px solid #cbd8ff;padding:0 0 0 12px}
+.transfer-readings-note{grid-column:1/-1;align-self:center;font-size:10px;color:var(--muted);line-height:1.9;border-left:2px solid #cbd8ff;padding:0 0 0 12px}
 .transfer-local-note{font-size:9px!important;margin:12px 0!important;line-height:1.8}
 .transfer-guide-icon{height:43px;width:43px;display:grid;place-items:center;background:var(--soft-blue);color:var(--primary);border-radius:12px;margin-bottom:16px}
 .transfer-guide h2{font-size:15px;line-height:1.65;margin-bottom:12px}
@@ -79,3 +79,18 @@ body[data-theme=dark] .transfer-status.user-confirmed{background:#233f35;color:#
 .transfer-month-control input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .transfer-month-control:focus-within{outline:3px solid #97b3ff;outline-offset:3px}
 .transfer-month-control:has(input[aria-invalid=true]){border-color:#da6b76}
+.transfer-service-tabs{display:flex;gap:10px;margin:0 0 25px}
+.transfer-service-tabs button{display:flex;align-items:center;gap:9px;border:1px solid var(--line);background:var(--surface);padding:13px 20px;border-radius:11px;font-size:12px;font-weight:700;color:var(--muted);min-height:46px}
+.transfer-service-tabs button svg{width:18px;height:18px;color:var(--service-color)}
+.transfer-service-tabs button.active{color:var(--text);border-color:var(--service-color);background:var(--service-bg)}
+.transfer-no-meter{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:0 0 22px;padding:17px 20px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.transfer-no-meter p{display:flex;align-items:flex-start;gap:10px;font-size:10px;color:var(--muted);line-height:1.8}
+.transfer-no-meter p>svg{flex-shrink:0;width:17px;height:17px;color:#8c9bbe;margin-top:3px}
+.transfer-no-meter strong{color:var(--text);font-weight:650}
+.service-transfer-link{padding:10px 19px;width:100%;justify-content:flex-start;border-top:1px solid var(--line);font-size:10px;color:var(--service-color)}
+.service-transfer-link>span{margin-left:auto}
+.service-transfer-link svg{width:13px;height:13px}
+.transfer-journal-main h3{overflow-wrap:anywhere}
+body[data-theme=dark] .transfer-service-tabs button.active{background:var(--soft-blue);border-color:var(--service-color)}
+@media(max-width:720px){.transfer-service-tabs{gap:7px}.transfer-service-tabs button{padding:11px 12px;font-size:10px;gap:6px;flex:1;justify-content:center}.transfer-service-tabs button svg{width:16px;height:16px}.transfer-no-meter{grid-template-columns:1fr;gap:12px}.transfer-no-meter p{font-size:9px}}
+@media(max-width:460px){.transfer-service-tabs button{padding:10px 6px;font-size:9px}.transfer-service-tabs button svg{width:13px;height:13px}.transfer-no-meter{padding:15px}.transfer-no-meter p{font-size:9px}}

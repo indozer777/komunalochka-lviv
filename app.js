@@ -26,6 +26,11 @@
     grmu: Object.freeze({ name: 'Газмережі · Львів', url: 'https://my.grmu.com.ua/login', accountDigits: 10, accountHelp: '10 цифр із платіжки за доставку газу', requiresIdentity: false }),
     naftogaz: Object.freeze({ name: 'Нафтогаз України', url: 'https://gas.ua/uk/indicators', accountDigits: 9, accountHelp: '9 цифр із платіжки Нафтогазу за газ', requiresIdentity: true })
   });
+  const TRANSFER_SERVICES = Object.freeze({
+    gas: { name: 'Газ', title: 'Показники газу', unit: 'м³', icon: 'flame', key: 'gasTransfer', previous: 'gasPrev', current: 'gasCurrent', channels: GAS_CHANNELS, source: 'https://lv.grmu.com.ua/', sourceLabel: 'Правила Львівської філії «Газмережі»', timing: 'Звичайний період подання газових показників — 1–5 числа. Доступні дати й виправлення перевіряйте на сайті вашого оператора.' },
+    water: { name: 'Вода', title: 'Показники води', unit: 'м³', icon: 'drop', key: 'waterTransfer', previous: 'waterPrev', current: 'waterCurrent', channels: { infolviv: { name: 'Львівводоканал · InfoLviv', url: 'https://infolviv.com.ua/', accountHelp: 'Особовий рахунок із платіжки Львівводоканалу', requiresIdentity: false } }, source: 'https://lvivvodokanal.com.ua/', sourceLabel: 'Сервіси Львівводоканалу', timing: 'Період приймання та перелік ваших водомірів перевіряйте в InfoLviv. Якщо маєте кілька лічильників, внесіть показник кожного у відповідне поле кабінету.' },
+    electricity: { name: 'Електроенергія', title: 'Показники електроенергії', unit: 'кВт·год', icon: 'bolt', key: 'electricityTransfer', previous: 'dayPrev', current: 'dayCurrent', channels: { loe: { name: 'Львівобленерго · форма без реєстрації', url: 'https://loe.lviv.ua/send-pokaz', accountDigits: 10, accountHelp: '10-значний код Львівобленерго з рахунку', requiresIdentity: false }, loeCabinet: { name: 'Львівобленерго · персональний кабінет', url: 'https://info.loe.lviv.ua/', accountDigits: 10, accountHelp: 'Той самий 10-значний код Львівобленерго', requiresIdentity: false } }, source: 'https://loe.lviv.ua/page/pokaz_pobut', sourceLabel: 'Способи подання у Львівобленерго', timing: 'Львівобленерго приймає показники за місяць в останні два дні місяця та до 3 числа наступного. Для двох зон передавайте обидва регістри й звіряйте їх призначення у кабінеті.' }
+  });
   function todayKyiv() {
     const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
     return ['year', 'month', 'day'].map(type => parts.find(p => p.type === type).value).join('-');
@@ -33,46 +38,80 @@
   function validReadingDate(value) {
     return typeof value === 'string' && /^(20\d{2}|2100)-\d{2}-\d{2}$/.test(value) && value >= '2020-01-01' && Number.isFinite(Date.parse(value)) && new Date(value + 'T12:00:00Z').toISOString().slice(0, 10) === value;
   }
-  function makeGasTransfer() { return { channel: 'grmu', accounts: { grmu: '', naftogaz: '' }, surnamePrefix: '', phone: '', readingDate: '', records: [] }; }
-  function prepareGasTransfer(input, today = todayKyiv()) {
-    const errors = {}, channel = Object.hasOwn(GAS_CHANNELS, input.channel) ? GAS_CHANNELS[input.channel] : null;
-    const account = String(input.account ?? '').trim(), surnamePrefix = String(input.surnamePrefix ?? '').trim().normalize('NFC').toUpperCase();
-    const rawPhone = String(input.phone ?? '').trim(); let phone = rawPhone.replace(/[\s()+-]/g, '');
+  function makeTransfer(service = 'gas') {
+    const channels = TRANSFER_SERVICES[service].channels;
+    return { channel: Object.keys(channels)[0], accounts: Object.fromEntries(Object.keys(channels).map(key => [key, ''])), surnamePrefix: '', phone: '', meterNumber: '', readingDate: '', records: [] };
+  }
+  function makeGasTransfer() { return makeTransfer('gas'); }
+  function prepareTransfer(input, today = todayKyiv()) {
+    const service = input.service ?? 'gas', spec = Object.hasOwn(TRANSFER_SERVICES, service) ? TRANSFER_SERVICES[service] : null;
+    const errors = {}, channel = spec && Object.hasOwn(spec.channels, input.channel) ? spec.channels[input.channel] : null;
+    const account = String(input.account ?? '').trim(), surnamePrefix = service === 'gas' ? String(input.surnamePrefix ?? '').trim().normalize('NFC').toUpperCase() : '';
+    const rawPhone = service === 'gas' ? String(input.phone ?? '').trim() : ''; let phone = rawPhone.replace(/[\s()+-]/g, '');
     if (/^0\d{9}$/.test(phone)) phone = '38' + phone;
-    const previous = String(input.previous ?? '').trim(), current = String(input.current ?? '').trim();
+    const canonicalReading = value => String(value ?? '').trim().replace(',', '.');
+    const previous = canonicalReading(input.previous), current = canonicalReading(input.current);
+    const meterNumber = service === 'gas' ? '' : String(input.meterNumber ?? '').trim();
     if (!channel) errors.channel = 'Оберіть офіційний сервіс';
-    if (channel && !new RegExp(`^\\d{${channel.accountDigits}}$`).test(account)) errors.account = `Вкажіть особовий рахунок: ${channel.accountDigits} цифр`;
+    if (channel && !(channel.accountDigits ? new RegExp(`^\\d{${channel.accountDigits}}$`) : /^\d{1,16}$/).test(account)) errors.account = channel.accountDigits ? `Вкажіть особовий рахунок: ${channel.accountDigits} цифр` : 'Вкажіть особовий рахунок із платіжки: до 16 цифр';
     if ((channel?.requiresIdentity || surnamePrefix) && !/^\p{L}{3}$/u.test(surnamePrefix)) errors.surnamePrefix = 'Вкажіть перші три літери прізвища власника';
     if ((channel?.requiresIdentity || rawPhone) && !/^380\d{9}$/.test(phone)) errors.phone = 'Вкажіть український номер: +380 та 9 цифр';
-    const readingOK = value => /^\d{1,9}$/.test(value) && Number(value) <= MAX_VALUE;
-    if (!readingOK(current)) errors.current = 'Вкажіть цілі м³ з лічильника, без цифр після коми';
-    if (previous && !readingOK(previous)) errors.previous = 'Попередній показник має бути цілим невід’ємним числом';
+    if (meterNumber.length > 40 || /[<>\r\n]/.test(meterNumber)) errors.meterNumber = 'Вкажіть номер лічильника, до 40 символів';
+    const readingOK = value => (service === 'water' ? /^\d{1,9}(?:\.\d{1,6})?$/ : /^\d{1,9}$/).test(value) && Number(value) <= MAX_VALUE;
+    if (!readingOK(current)) errors.current = service === 'water' ? 'Вкажіть накопичений показник водоміра, до 6 знаків після коми' : `Вкажіть цілі ${spec?.unit || 'одиниці'} з лічильника, без цифр після коми`;
+    if (previous && !readingOK(previous)) errors.previous = 'Перевірте попередній накопичений показник';
     if (readingOK(current) && readingOK(previous) && Number(current) < Number(previous)) errors.current = 'Поточний показник менший за попередній';
+    const zone = service === 'electricity' ? input.zone : 'single';
+    const nightPrevious = service === 'electricity' && zone === 'dual' ? canonicalReading(input.nightPrevious) : '';
+    const nightCurrent = service === 'electricity' && zone === 'dual' ? canonicalReading(input.nightCurrent) : '';
+    if (service === 'electricity' && !['single', 'dual'].includes(zone)) errors.zone = 'Оберіть одну або дві зони';
+    if (zone === 'dual') {
+      if (!readingOK(nightCurrent)) errors.nightCurrent = 'Вкажіть цілий накопичений нічний показник';
+      if (nightPrevious && !readingOK(nightPrevious)) errors.nightPrevious = 'Перевірте попередній нічний показник';
+      if (readingOK(nightCurrent) && readingOK(nightPrevious) && Number(nightCurrent) < Number(nightPrevious)) errors.nightCurrent = 'Нічний показник менший за попередній';
+    }
     if (!validReadingDate(input.readingDate) || input.readingDate > today) errors.readingDate = 'Оберіть коректну дату зняття показника, не пізніше сьогодні';
     if (!validPeriod(input.period) || input.period > today.slice(0, 7)) errors.period = 'Оберіть поточний або минулий місяць';
     const profileName = String(input.profileName ?? '').trim(), address = String(input.address ?? '').trim();
     if (!profileName || profileName.length > 60 || address.length > 160) errors.profile = 'Перевірте назву й адресу помешкання';
-    return { errors, payload: Object.keys(errors).length ? null : { channel: input.channel, account, surnamePrefix, phone: phone ? '+' + phone : '', previous, current, readingDate: input.readingDate, period: input.period, profileName, address } };
+    return { errors, payload: Object.keys(errors).length ? null : { service, channel: input.channel, account, surnamePrefix, phone: phone ? '+' + phone : '', meterNumber, previous, current, zone, nightPrevious, nightCurrent, readingDate: input.readingDate, period: input.period, profileName, address } };
+  }
+  function prepareGasTransfer(input, today = todayKyiv()) { return prepareTransfer({ ...input, service: 'gas' }, today); }
+  function transferReadingSummary(payload) {
+    const spec = TRANSFER_SERVICES[payload.service ?? 'gas'];
+    return payload.service === 'electricity' && payload.zone === 'dual' ? `День ${payload.current} / ніч ${payload.nightCurrent} ${spec.unit}` : `${payload.current} ${spec.unit}`;
+  }
+  function transferValues(payload) {
+    const service = payload.service ?? 'gas', unit = TRANSFER_SERVICES[service].unit, dual = service === 'electricity' && payload.zone === 'dual';
+    return [['account', 'Особовий рахунок', payload.account], ['meterNumber', 'Номер лічильника', payload.meterNumber], ['surnamePrefix', 'Перші три літери прізвища', payload.surnamePrefix], ['phone', 'Телефон', payload.phone], ['previous', `${dual ? 'День · попередній' : 'Попередній показник'}, ${unit}`, payload.previous], ['current', `${dual ? 'День · поточний' : 'Поточний показник'}, ${unit}`, payload.current], ['nightPrevious', `Ніч · попередній, ${unit}`, dual ? payload.nightPrevious : ''], ['nightCurrent', `Ніч · поточний, ${unit}`, dual ? payload.nightCurrent : '']].filter(value => value[2]);
+  }
+  function transferText(payload) {
+    const spec = TRANSFER_SERVICES[payload.service ?? 'gas'];
+    return [`${spec.title} · ${spec.channels[payload.channel].name}`, `Помешкання: ${payload.profileName}${payload.address ? ', Львів, ' + payload.address : ', Львів'}`, `Місяць обліку: ${payload.period}`, `Дата зняття: ${payload.readingDate}`, ...transferValues(payload).map(([key, label, value]) => ['previous', 'current', 'nightPrevious', 'nightCurrent'].includes(key) ? `${label.replace(', ' + spec.unit, '')}: ${value} ${spec.unit}` : `${label}: ${value}`)].join('\n');
   }
   function gasTransferText(payload) {
-    return [`Показники газу · ${GAS_CHANNELS[payload.channel].name}`, `Помешкання: ${payload.profileName}${payload.address ? ', Львів, ' + payload.address : ', Львів'}`, `Особовий рахунок: ${payload.account}`, ...(payload.surnamePrefix ? [`Перші три літери прізвища: ${payload.surnamePrefix}`] : []), ...(payload.phone ? [`Телефон: ${payload.phone}`] : []), `Місяць обліку: ${payload.period}`, `Дата зняття: ${payload.readingDate}`, ...(payload.previous ? [`Попередній показник: ${payload.previous} м³`] : []), `Поточний показник: ${payload.current} м³`].join('\n');
+    return transferText({ ...payload, service: 'gas' });
   }
-  function normalizeGasTransfer(raw) {
-    if (raw === undefined) return makeGasTransfer(); // Backward-compatible with existing v1 backups.
-    if (!raw || !Object.hasOwn(GAS_CHANNELS, raw.channel) || !raw.accounts || !Array.isArray(raw.records) || raw.records.length > 200) throw new Error('Некоректні дані передачі газу');
-    const normalized = makeGasTransfer(); normalized.channel = raw.channel;
-    for (const key of ['grmu', 'naftogaz']) { if (typeof raw.accounts[key] !== 'string' || raw.accounts[key].length > 16) throw new Error('Некоректний особовий рахунок'); normalized.accounts[key] = raw.accounts[key]; }
+  function normalizeTransfer(raw, service = 'gas') {
+    if (raw === undefined) return makeTransfer(service); // Older v1 backups retain every gas record.
+    const channels = TRANSFER_SERVICES[service].channels;
+    if (!raw || !Object.hasOwn(channels, raw.channel) || !raw.accounts || !Array.isArray(raw.records) || raw.records.length > 200) throw new Error('Некоректні дані передачі показників');
+    const normalized = makeTransfer(service); normalized.channel = raw.channel;
+    for (const key of Object.keys(channels)) { if (typeof raw.accounts[key] !== 'string' || raw.accounts[key].length > 16) throw new Error('Некоректний особовий рахунок'); normalized.accounts[key] = raw.accounts[key]; }
     for (const [key, max] of [['surnamePrefix', 3], ['phone', 24], ['readingDate', 10]]) { if (typeof raw[key] !== 'string' || raw[key].length > max) throw new Error('Некоректні реквізити передачі'); normalized[key] = raw[key]; }
+    if (raw.meterNumber !== undefined) { if (typeof raw.meterNumber !== 'string' || raw.meterNumber.length > 40) throw new Error('Некоректний номер лічильника'); normalized.meterNumber = raw.meterNumber; }
     const ids = new Set(), isTimestamp = value => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
     normalized.records = raw.records.map(record => {
       if (!record || typeof record.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(record.id) || ids.has(record.id) || !['prepared', 'opened', 'confirmed-by-user'].includes(record.status) || !isTimestamp(record.createdAt) || typeof record.confirmationRef !== 'string' || record.confirmationRef.length > 120 || !record.payload || typeof record.payload !== 'object') throw new Error('Некоректний журнал передачі');
-      ids.add(record.id); const validated = prepareGasTransfer(record.payload, '2100-12-31'); if (!validated.payload) throw new Error('Некоректні показники в журналі передачі');
+      if ((record.payload.service ?? 'gas') !== service) throw new Error('Послуга запису не відповідає журналу');
+      ids.add(record.id); const validated = prepareTransfer({ ...record.payload, service }, '2100-12-31'); if (!validated.payload) throw new Error('Некоректні показники в журналі передачі');
       if ((record.openedAt !== null && !isTimestamp(record.openedAt)) || (record.confirmedAt !== null && !isTimestamp(record.confirmedAt)) || (record.status !== 'prepared' && !record.openedAt) || (record.status === 'confirmed-by-user' && !record.confirmedAt)) throw new Error('Некоректний статус передачі');
       if ((record.status === 'prepared' && (record.openedAt || record.confirmedAt || record.confirmationRef)) || (record.status === 'opened' && (record.confirmedAt || record.confirmationRef)) || (record.openedAt && Date.parse(record.openedAt) < Date.parse(record.createdAt)) || (record.confirmedAt && Date.parse(record.confirmedAt) < Date.parse(record.openedAt))) throw new Error('Некоректна послідовність передачі');
       return { id: record.id, status: record.status, createdAt: record.createdAt, openedAt: record.openedAt, confirmedAt: record.confirmedAt, confirmationRef: record.confirmationRef, payload: validated.payload };
     });
     return normalized;
   }
+  function normalizeGasTransfer(raw) { return normalizeTransfer(raw, 'gas'); }
   const FIELD_KEYS = ['gasPrev', 'gasCurrent', 'waterPrev', 'waterCurrent', 'dayPrev', 'dayCurrent', 'nightPrev', 'nightCurrent', 'deliveryAnnual', 'residents'];
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const money = value => new Intl.NumberFormat('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
@@ -98,7 +137,7 @@
     return { ...Object.fromEntries(FIELD_KEYS.map(key => [key, ''])), zone: 'single', includes: Object.fromEntries(SERVICES.map(s => [s.id, true])) };
   }
   const uid = () => globalThis.crypto?.randomUUID?.() || `home-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  function makeProfile(name = 'Моя оселя', address = '') { return { id: uid(), name, address, manual: false, rates: { ...REFERENCE_RATES }, drafts: {}, history: [], gasTransfer: makeGasTransfer() }; }
+  function makeProfile(name = 'Моя оселя', address = '') { return { id: uid(), name, address, manual: false, rates: { ...REFERENCE_RATES }, drafts: {}, history: [], transferService: 'gas', gasTransfer: makeGasTransfer(), waterTransfer: makeTransfer('water'), electricityTransfer: makeTransfer('electricity') }; }
   function makeState() { const p = makeProfile(); return { version: 1, period: currentPeriod(), activeId: p.id, profiles: [p], activationKey: '', theme: 'light', lastFetch: null }; }
 
   function calculate(draft, rates) {
@@ -171,7 +210,10 @@
         if (!result.complete) throw new Error('Історія містить незавершений розрахунок');
         return { period: h.period, savedAt: h.savedAt, draft, rates, result };
       });
-      return { id: p.id, name: p.name.trim(), address: p.address, manual: p.manual, rates: sanitizeRates(p.rates), drafts, history, gasTransfer: normalizeGasTransfer(p.gasTransfer) };
+      const transferService = p.transferService ?? 'gas'; if (!Object.hasOwn(TRANSFER_SERVICES, transferService)) throw new Error('Некоректна обрана послуга');
+      const transfers = Object.fromEntries(Object.entries(TRANSFER_SERVICES).map(([service, spec]) => [spec.key, normalizeTransfer(p[spec.key], service)]));
+      const transferIds = Object.values(transfers).flatMap(value => value.records.map(record => record.id)); if (new Set(transferIds).size !== transferIds.length) throw new Error('Повторний ID запису передачі');
+      return { id: p.id, name: p.name.trim(), address: p.address, manual: p.manual, rates: sanitizeRates(p.rates), drafts, history, transferService, ...transfers };
     });
     if (!ids.has(raw.activeId)) throw new Error('Помешкання не знайдено');
     return { version: 1, period: raw.period, activeId: raw.activeId, profiles, activationKey: validateKey(raw.activationKey) ? raw.activationKey.trim().toUpperCase() : '', theme: raw.theme === 'dark' ? 'dark' : 'light', lastFetch: typeof raw.lastFetch === 'string' && Number.isFinite(Date.parse(raw.lastFetch)) ? raw.lastFetch : null };
@@ -198,7 +240,7 @@
     }
     return null;
   }
-  const Core = { STORAGE_KEY, KEYS, SERVICES, REFERENCE_RATES, GAS_CHANNELS, parseNumber, validateKey, calculate, makeDraft, makeState, normalizeState, parseProviderText, validPeriod, escapeHTML, roundMoney, makeGasTransfer, prepareGasTransfer, gasTransferText, normalizeGasTransfer, validReadingDate };
+  const Core = { STORAGE_KEY, KEYS, SERVICES, REFERENCE_RATES, GAS_CHANNELS, TRANSFER_SERVICES, parseNumber, validateKey, calculate, makeDraft, makeState, normalizeState, parseProviderText, validPeriod, escapeHTML, roundMoney, makeGasTransfer, prepareGasTransfer, gasTransferText, normalizeGasTransfer, validReadingDate, makeTransfer, prepareTransfer, normalizeTransfer, transferText, transferReadingSummary };
   if (typeof module !== 'undefined' && module.exports) module.exports = Core;
   if (typeof document === 'undefined') return;
   window.KomunalCore = Core;
@@ -286,7 +328,7 @@
       if (s.id === 'delivery') fields = `${field('deliveryAnnual', 'Річна замовлена потужність, м³', 'Наприклад, 240')}<div class="field-help">Річна потужність ÷ 12 × тариф. Візьміть потужність із рахунку «Газмережі».</div>`;
       if (s.id === 'trash') fields = `${field('residents', 'Зареєстровано мешканців', 'Наприклад, 2')}<div class="field-help">Тариф за особу встановлює ваш перевізник. Вкажіть його у розділі «Тарифи».</div>`;
       const header = `<div class="service-head"><span class="service-icon">${icon(s.icon)}</span><div><h3>${s.name}</h3><div class="service-provider">${s.provider}</div></div><label class="service-toggle"><span class="sr-only">Врахувати: ${s.name}</span><input type="checkbox" data-include="${s.id}" ${d.includes[s.id] ? 'checked' : ''}></label></div>`;
-      return `<article class="service-card ${s.id}${d.includes[s.id] ? '' : ' excluded'}" id="card-${s.id}">${s.id === 'electricity' ? `<div class="electricity-header">${header}<div class="zone-switch" aria-label="Тип електролічильника"><button data-zone="single" aria-pressed="${d.zone === 'single'}">Одна зона</button><button data-zone="dual" aria-pressed="${d.zone === 'dual'}">День / ніч</button></div></div>` : header}<div class="tariff-line">Тариф: <strong>${tariffText(s.id)}</strong><span class="rate-status" title="${profile().manual ? 'Власний тариф' : 'Довідкова ставка: звірте з рахунком'}"></span></div><div class="service-fields">${fields}</div><div class="card-result"><span class="consumption" id="quantity-${s.id}">Додайте показники</span><strong><span id="amount-${s.id}">—</span><small>грн</small></strong></div><div class="field-error" id="service-error-${s.id}" aria-live="polite"></div></article>`;
+      return `<article class="service-card ${s.id}${d.includes[s.id] ? '' : ' excluded'}" id="card-${s.id}">${s.id === 'electricity' ? `<div class="electricity-header">${header}<div class="zone-switch" aria-label="Тип електролічильника"><button data-zone="single" aria-pressed="${d.zone === 'single'}">Одна зона</button><button data-zone="dual" aria-pressed="${d.zone === 'dual'}">День / ніч</button></div></div>` : header}<div class="tariff-line">Тариф: <strong>${tariffText(s.id)}</strong><span class="rate-status" title="${profile().manual ? 'Власний тариф' : 'Довідкова ставка: звірте з рахунком'}"></span></div><div class="service-fields">${fields}</div><div class="card-result"><span class="consumption" id="quantity-${s.id}">Додайте показники</span><strong><span id="amount-${s.id}">—</span><small>грн</small></strong></div><div class="field-error" id="service-error-${s.id}" aria-live="polite"></div>${Object.hasOwn(TRANSFER_SERVICES, s.id) ? `<button class="text-button service-transfer-link" data-transfer-service="${s.id}">${icon('send')}Передати показники <span>↗</span></button>` : ''}</article>`;
     }).join('');
     updateCalculation();
   }
@@ -358,51 +400,80 @@
   }
 
   const transferStatus = record => ({ prepared: 'Підготовлено', opened: 'Перехід до форми', 'confirmed-by-user': 'Позначено вами як передане' }[record.status]);
-  const findTransfer = id => profile().gasTransfer.records.find(r => r.id === id);
+  const transferSpec = () => TRANSFER_SERVICES[profile().transferService];
+  const transferConfig = () => profile()[transferSpec().key];
+  const transferOwner = id => {
+    for (const [service, spec] of Object.entries(TRANSFER_SERVICES)) {
+      const config = profile()[spec.key], record = config.records.find(value => value.id === id);
+      if (record) return { service, config, record };
+    }
+    return null;
+  };
+  const findTransfer = id => transferOwner(id)?.record;
   const maskAccount = account => '•••• ' + account.slice(-4);
-  function transferField(key, label, value, { type = 'text', max = 24, hint = '', required = false, reading = '', setting = '' } = {}) {
-    return `<div class="transfer-field"><label for="transfer-${key}">${label}${required ? ' *' : ''}</label><input id="transfer-${key}" type="${type}" value="${escapeHTML(value)}" maxlength="${max}" ${type === 'text' && ['account', 'phone', 'previous', 'current'].includes(key) ? 'inputmode="numeric"' : ''} ${type === 'date' ? `min="2020-01-01" max="${todayKyiv()}"` : ''} ${required ? 'required' : ''} ${reading ? `data-transfer-reading="${reading}"` : ''} ${setting ? `data-transfer-setting="${setting}"` : ''} autocomplete="off" aria-describedby="transfer-error-${key}${hint ? ' transfer-hint-' + key : ''}">${hint ? `<small id="transfer-hint-${key}">${hint}</small>` : ''}<div class="field-error" id="transfer-error-${key}" aria-live="polite"></div></div>`;
+  function transferField(key, label, value, { type = 'text', max = 24, hint = '', required = false, reading = '', setting = '', decimal = false } = {}) {
+    const numeric = ['account', 'phone', 'previous', 'current', 'nightPrevious', 'nightCurrent'].includes(key);
+    return `<div class="transfer-field"><label for="transfer-${key}">${label}${required ? ' *' : ''}</label><input id="transfer-${key}" type="${type}" value="${escapeHTML(value)}" maxlength="${max}" ${type === 'text' && numeric ? `inputmode="${decimal ? 'decimal' : 'numeric'}"` : ''} ${type === 'date' ? `min="2020-01-01" max="${todayKyiv()}"` : ''} ${required ? 'required' : ''} ${reading ? `data-transfer-reading="${reading}"` : ''} ${setting ? `data-transfer-setting="${setting}"` : ''} autocomplete="off" aria-describedby="transfer-error-${key}${hint ? ' transfer-hint-' + key : ''}">${hint ? `<small id="transfer-hint-${key}">${hint}</small>` : ''}<div class="field-error" id="transfer-error-${key}" aria-live="polite"></div></div>`;
   }
   function renderTransferJournal() {
     const container = $('#transfer-journal'); if (!container) return;
-    const records = [...profile().gasTransfer.records].reverse();
-    container.innerHTML = records.length ? records.map(record => `<article class="transfer-journal-row"><span class="service-icon gas">${icon(record.status === 'confirmed-by-user' ? 'check' : 'send')}</span><div class="transfer-journal-main"><h3>${escapeHTML(record.payload.current)} м³ <span>· ${escapeHTML(record.payload.period)}</span></h3><p>${GAS_CHANNELS[record.payload.channel].name} · ${maskAccount(record.payload.account)} · знято ${escapeHTML(record.payload.readingDate)}</p><span class="transfer-status ${record.status === 'confirmed-by-user' ? 'user-confirmed' : ''}">${transferStatus(record)}</span></div><div class="transfer-journal-actions"><button class="text-button" data-transfer-record="${record.id}">Деталі</button><button class="icon-button" data-transfer-delete="${record.id}" aria-label="Видалити запис ${escapeHTML(record.payload.period)}">${icon('close')}</button></div></article>`).join('') : '<div class="transfer-empty">Тут з’являться підготовлені показники та ваші відмітки про передачу.</div>';
+    const spec = transferSpec(), records = [...transferConfig().records].reverse();
+    container.innerHTML = records.length ? records.map(record => `<article class="transfer-journal-row"><span class="service-icon ${record.payload.service}">${icon(record.status === 'confirmed-by-user' ? 'check' : spec.icon)}</span><div class="transfer-journal-main"><h3>${escapeHTML(transferReadingSummary(record.payload))} <span>· ${escapeHTML(record.payload.period)}</span></h3><p>${spec.channels[record.payload.channel].name} · ${maskAccount(record.payload.account)} · знято ${escapeHTML(record.payload.readingDate)}${record.payload.meterNumber ? ' · лічильник ' + escapeHTML(record.payload.meterNumber) : ''}</p><span class="transfer-status ${record.status === 'confirmed-by-user' ? 'user-confirmed' : ''}">${transferStatus(record)}</span></div><div class="transfer-journal-actions"><button class="text-button" data-transfer-record="${record.id}">Деталі</button><button class="icon-button" data-transfer-delete="${record.id}" aria-label="Видалити запис ${escapeHTML(record.payload.period)}">${icon('close')}</button></div></article>`).join('') : `<div class="transfer-empty">${spec.name}: тут з’являться підготовлені показники та ваші відмітки про передачу.</div>`;
   }
   function renderTransfer() {
-    const p = profile(), config = p.gasTransfer, channel = GAS_CHANNELS[config.channel], d = draft();
-    $('#view-transfer').innerHTML = `${pageHeading('Передача показників', 'Підготуйте дані тут. Завершіть відправлення на офіційному сайті.')}<div class="transfer-steps"><span><b>1</b>Підготуйте показники</span><span><b>2</b>Передайте на сайті сервісу</span><span><b>3</b>Збережіть власну відмітку</span></div><div class="transfer-layout"><div><div class="panel"><div class="panel-heading"><h2>${icon('flame')} Газ · ${escapeHTML(p.name)}</h2><span class="pill">ДОСТУПНО БЕЗ PREMIUM</span></div><form id="gas-transfer-form" novalidate><label for="transfer-channel">Де передати показники</label><select id="transfer-channel">${Object.entries(GAS_CHANNELS).map(([id, c]) => `<option value="${id}" ${id === config.channel ? 'selected' : ''}>${c.name}</option>`).join('')}</select><p class="transfer-channel-help">${config.channel === 'grmu' ? 'Для Львова: кабінет оператора розподілу. Увійдіть у свій кабінет, оберіть особовий рахунок і внесіть показник.' : 'Офіційна форма Нафтогазу. Можливість подання для вашого оператора перевіряється на стороні Нафтогазу.'}</p><div class="transfer-form-grid">${transferField('account', 'Особовий рахунок', config.accounts[config.channel], { max: 16, hint: channel.accountHelp + '. Це не заводський номер лічильника.', required: true, setting: 'account' })}${transferField('surnamePrefix', 'Перші три літери прізвища', config.surnamePrefix, { max: 3, hint: config.channel === 'grmu' ? 'Для прив’язки рахунку в кабінеті, якщо знадобиться.' : 'Прізвище власника особового рахунку.', required: channel.requiresIdentity, setting: 'surnamePrefix' })}${transferField('phone', 'Номер телефона', config.phone, { hint: channel.requiresIdentity ? 'Для форми Нафтогазу: +380XXXXXXXXX.' : 'Необов’язково для підготовки в кабінет «Газмережі».', required: channel.requiresIdentity, setting: 'phone' })}${transferField('readingDate', 'Дата зняття показника', config.readingDate || todayKyiv(), { type: 'date', required: true, setting: 'readingDate' })}<div class="transfer-field"><label for="transfer-period">Місяць обліку *</label><div class="transfer-month-control"><span aria-hidden="true">${escapeHTML(monthLabel(state.period))}</span><input id="transfer-period" type="month" value="${state.period}" min="2020-01" max="${todayKyiv().slice(0, 7)}" aria-describedby="transfer-error-period"></div><div class="field-error" id="transfer-error-period" aria-live="polite"></div></div><div class="transfer-readings-note">Показники взято з калькулятора цього місяця. Їх можна виправити тут; зміни збережуться і в розрахунку.</div>${transferField('previous', 'Попередній показник, м³', d.gasPrev, { hint: 'Необов’язково: офіційний кабінет може вже містити його.', reading: 'gasPrev' })}${transferField('current', 'Поточний показник, м³', d.gasCurrent, { required: true, hint: 'Лише цілі м³ — цифри до коми або кольорового поля.', reading: 'gasCurrent' })}</div><p id="transfer-form-feedback" class="form-feedback" role="status"></p><button class="button primary full" type="submit">${icon('send')}Підготувати передачу</button><p class="transfer-local-note">Реквізити зберігаються тільки в цьому браузері для цього помешкання. Паролі та SMS-коди тут не потрібні.</p><button type="button" class="text-button muted" data-action="clear-transfer-details">Очистити збережені реквізити</button></form></div></div><aside><div class="panel transfer-guide"><span class="transfer-guide-icon">${icon('shield')}</span><h2>Офіційний сайт — останній крок</h2><p>Скопіюйте потрібні значення, відкрийте сервіс, внесіть дані та дочекайтеся його підтвердження.</p><div class="notice">Перехід за посиланням не передає показники. «КомуналОчка» не отримує відповіді постачальника й не може сама підтвердити прийняття.</div><p>Звичайний період подання газових показників — 1–5 числа. Доступні дати й виправлення перевіряйте на сайті вашого оператора.</p><a href="https://lv.grmu.com.ua/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Правила Львівської філії «Газмережі» ↗</a></div></aside></div><div class="panel"><div class="panel-heading"><h2>Журнал передачі</h2><span class="tariff-stamp">${escapeHTML(p.name)}</span></div><p>Відмітки нижче ведете ви. Вони не є квитанціями постачальника.</p><div id="transfer-journal"></div></div>`;
+    const p = profile(), service = p.transferService, spec = transferSpec(), config = transferConfig(), channel = spec.channels[config.channel], d = draft();
+    const electricity = service === 'electricity', dual = electricity && d.zone === 'dual', water = service === 'water';
+    const channelHelp = service === 'gas' ? (config.channel === 'grmu' ? 'Для Львова: кабінет оператора розподілу. Увійдіть у свій кабінет, оберіть особовий рахунок і внесіть показник.' : 'Офіційна форма Нафтогазу. Можливість подання для вашого оператора перевіряється на стороні Нафтогазу.') : water ? 'InfoLviv — портал, на який веде офіційний сайт Львівводоканалу. Увійдіть, оберіть особовий рахунок і потрібний водомір. Реєстрацію та підтвердження проходьте на порталі.' : 'Використовуйте код Львівобленерго. Це не EIC-код і не заводський номер лічильника. На офіційному сервісі оберіть потрібний прилад та відповідні зони.';
+    const readingHint = water ? 'Накопичений показник водоміра, без округлення. Допустиму точність звірте у кабінеті.' : `Лише цілі ${spec.unit} — цифри до коми або кольорового поля.`;
+    const readings = transferField('previous', `${dual ? 'День · попередній' : 'Попередній показник'}, ${spec.unit}`, d[spec.previous], { hint: 'Необов’язково: кабінет може вже містити його.', reading: spec.previous, decimal: water }) + transferField('current', `${dual ? 'День · поточний' : 'Поточний показник'}, ${spec.unit}`, d[spec.current], { required: true, hint: readingHint, reading: spec.current, decimal: water }) + (dual ? transferField('nightPrevious', `Ніч · попередній, ${spec.unit}`, d.nightPrev, { reading: 'nightPrev', hint: 'Необов’язковий попередній нічний регістр.' }) + transferField('nightCurrent', `Ніч · поточний, ${spec.unit}`, d.nightCurrent, { required: true, reading: 'nightCurrent', hint: 'Окремий накопичений нічний показник. Не сумуйте його з денним.' }) : '');
+    $('#view-transfer').innerHTML = `${pageHeading('Передача показників', 'Підготуйте дані тут. Завершіть відправлення на офіційному сайті.')}
+      <div class="transfer-service-tabs" role="group" aria-label="Послуга для передачі показників">${Object.entries(TRANSFER_SERVICES).map(([id, value]) => `<button class="${id === service ? 'active' : ''} ${id}" data-transfer-service="${id}" aria-pressed="${id === service}">${icon(value.icon)}${value.name}</button>`).join('')}</div>
+      <div class="transfer-steps"><span><b>1</b>Підготуйте показники</span><span><b>2</b>Передайте на сайті сервісу</span><span><b>3</b>Збережіть власну відмітку</span></div>
+      <div class="transfer-layout"><div><div class="panel"><div class="panel-heading"><h2>${icon(spec.icon)} ${spec.name} · ${escapeHTML(p.name)}</h2><span class="pill">ДОСТУПНО БЕЗ PREMIUM</span></div>
+      <form id="readings-transfer-form" novalidate><label for="transfer-channel">Де передати показники</label><select id="transfer-channel">${Object.entries(spec.channels).map(([id, value]) => `<option value="${id}" ${id === config.channel ? 'selected' : ''}>${value.name}</option>`).join('')}</select><p class="transfer-channel-help">${channelHelp}</p>
+      ${electricity ? `<label for="transfer-zone">Тип обліку</label><select id="transfer-zone"><option value="single" ${d.zone === 'single' ? 'selected' : ''}>Одна зона</option><option value="dual" ${d.zone === 'dual' ? 'selected' : ''}>День / ніч — два окремі показники</option></select><p class="transfer-channel-help">Тип обліку синхронізований із калькулятором цього місяця.</p>` : ''}
+      <div class="transfer-form-grid">${transferField('account', electricity ? '10-значний код Львівобленерго' : 'Особовий рахунок', config.accounts[config.channel], { max: 16, hint: channel.accountHelp + '. Це не заводський номер лічильника.', required: true, setting: 'account' })}
+      ${service === 'gas' ? transferField('surnamePrefix', 'Перші три літери прізвища', config.surnamePrefix, { max: 3, hint: config.channel === 'grmu' ? 'Для прив’язки рахунку в кабінеті, якщо знадобиться.' : 'Прізвище власника особового рахунку.', required: channel.requiresIdentity, setting: 'surnamePrefix' }) + transferField('phone', 'Номер телефона', config.phone, { hint: channel.requiresIdentity ? 'Для форми Нафтогазу: +380XXXXXXXXX.' : 'Необов’язково для підготовки в кабінет «Газмережі».', required: channel.requiresIdentity, setting: 'phone' }) : transferField('meterNumber', 'Номер лічильника (необов’язково)', config.meterNumber, { max: 40, hint: 'Допоможе обрати прилад у кабінеті. Залиште порожнім, якщо не знаєте.', setting: 'meterNumber' })}
+      ${transferField('readingDate', 'Дата зняття показника', config.readingDate || todayKyiv(), { type: 'date', required: true, setting: 'readingDate' })}
+      <div class="transfer-field"><label for="transfer-period">Місяць обліку *</label><div class="transfer-month-control"><span aria-hidden="true">${escapeHTML(monthLabel(state.period))}</span><input id="transfer-period" type="month" value="${state.period}" min="2020-01" max="${todayKyiv().slice(0, 7)}" aria-describedby="transfer-error-period"></div><div class="field-error" id="transfer-error-period" aria-live="polite"></div></div>
+      <div class="transfer-readings-note">Показники взято з калькулятора цього місяця. Їх можна виправити тут; зміни збережуться і в розрахунку.</div>${readings}</div>
+      <p id="transfer-form-feedback" class="form-feedback" role="status"></p><button class="button primary full" type="submit">${icon('send')}Підготувати передачу</button><p class="transfer-local-note">Реквізити зберігаються тільки в цьому браузері, окремо для цієї послуги й помешкання. Паролі та SMS-коди тут не потрібні.</p><button type="button" class="text-button muted" data-action="clear-transfer-details">Очистити реквізити цієї послуги</button></form></div></div>
+      <aside><div class="panel transfer-guide"><span class="transfer-guide-icon">${icon('shield')}</span><h2>Офіційний сайт — останній крок</h2><p>Скопіюйте потрібні значення, відкрийте сервіс, внесіть дані та дочекайтеся його підтвердження.</p><div class="notice">Перехід за посиланням не передає показники. «КомуналОчка» не отримує відповіді постачальника й не може сама підтвердити прийняття.</div><p>${spec.timing}</p><a href="${spec.source}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${spec.sourceLabel} ↗</a></div></aside></div>
+      <div class="transfer-no-meter"><p>${icon('pipe')}<span><strong>Доставка газу:</strong> окремого показника немає. Подавайте показник газового лічильника у вкладці «Газ»; доставка рахується за замовленою потужністю.</span></p><p>${icon('leaf')}<span><strong>Вивіз сміття:</strong> лічильника немає. Зміну кількості мешканців узгоджуйте зі своїм перевізником.</span></p></div>
+      <div class="panel"><div class="panel-heading"><h2>Журнал передачі · ${spec.name.toLowerCase()}</h2><span class="tariff-stamp">${escapeHTML(p.name)}</span></div><p>Відмітки нижче ведете ви. Вони не є квитанціями постачальника.</p><div id="transfer-journal"></div></div>`;
     renderTransferJournal();
-    $('#gas-transfer-form').addEventListener('submit', e => { e.preventDefault(); prepareTransferFromForm(); });
+    $('#readings-transfer-form').addEventListener('submit', event => { event.preventDefault(); prepareTransferFromForm(); });
   }
   function prepareTransferFromForm() {
-    const p = profile(), config = p.gasTransfer;
-    const validated = prepareGasTransfer({ channel: config.channel, account: config.accounts[config.channel], surnamePrefix: config.surnamePrefix, phone: config.phone, previous: draft().gasPrev, current: draft().gasCurrent, readingDate: $('#transfer-readingDate').value, period: state.period, profileName: p.name, address: p.address });
-    for (const key of ['account', 'surnamePrefix', 'phone', 'previous', 'current', 'readingDate', 'period']) { $(`#transfer-${key}`).setAttribute('aria-invalid', String(Boolean(validated.errors[key]))); $(`#transfer-error-${key}`).textContent = validated.errors[key] || ''; }
-    if (!validated.payload) { $('#transfer-form-feedback').textContent = 'Перевірте виділені поля. Дані нікуди не надіслано.'; $(`#transfer-${Object.keys(validated.errors)[0]}`)?.focus(); return; }
-    const existing = config.records.find(r => JSON.stringify(r.payload) === JSON.stringify(validated.payload));
+    const p = profile(), spec = transferSpec(), config = transferConfig(), d = draft();
+    const validated = prepareTransfer({ service: p.transferService, channel: config.channel, account: config.accounts[config.channel], surnamePrefix: config.surnamePrefix, phone: config.phone, meterNumber: config.meterNumber, previous: d[spec.previous], current: d[spec.current], zone: d.zone, nightPrevious: d.nightPrev, nightCurrent: d.nightCurrent, readingDate: $('#transfer-readingDate').value, period: state.period, profileName: p.name, address: p.address });
+    for (const key of ['account', 'surnamePrefix', 'phone', 'meterNumber', 'previous', 'current', 'nightPrevious', 'nightCurrent', 'readingDate', 'period', 'zone']) {
+      const input = $(`#transfer-${key}`), feedback = $(`#transfer-error-${key}`); if (input) input.setAttribute('aria-invalid', String(Boolean(validated.errors[key]))); if (feedback) feedback.textContent = validated.errors[key] || '';
+    }
+    if (!validated.payload) { $('#transfer-form-feedback').textContent = Object.values(validated.errors)[0] || 'Перевірте виділені поля. Дані нікуди не надіслано.'; $(`#transfer-${Object.keys(validated.errors)[0]}`)?.focus(); return; }
+    const existing = config.records.find(record => JSON.stringify(record.payload) === JSON.stringify(validated.payload));
     if (existing) { showTransferRecord(existing.id); return; }
-    if (config.records.length >= 200) { $('#transfer-form-feedback').textContent = 'У журналі вже 200 записів. Видаліть непотрібні перед підготовкою нових.'; return; }
+    if (config.records.length >= 200) { $('#transfer-form-feedback').textContent = 'У журналі цієї послуги вже 200 записів. Видаліть непотрібні перед підготовкою нових.'; return; }
     const record = { id: uid(), payload: validated.payload, status: 'prepared', createdAt: new Date().toISOString(), openedAt: null, confirmedAt: null, confirmationRef: '' };
     config.readingDate = validated.payload.readingDate; config.records.push(record); persist(); renderTransferJournal(); showTransferRecord(record.id);
   }
   function showTransferRecord(id) {
     const record = findTransfer(id); if (!record) { toast('Запис не знайдено'); return; }
-    const p = record.payload, channel = GAS_CHANNELS[p.channel];
-    const values = [['account', 'Особовий рахунок', p.account], ['surnamePrefix', 'Перші три літери прізвища', p.surnamePrefix], ['phone', 'Телефон', p.phone], ['previous', 'Попередній показник, м³', p.previous], ['current', 'Поточний показник, м³', p.current]].filter(v => v[2] !== '');
-    generalDialog(`<span class="eyebrow">ГАЗ · ${channel.name}</span><h2 id="general-title">Показники готові до передачі</h2><p>${escapeHTML(p.profileName)} · місяць ${escapeHTML(p.period)} · знято ${escapeHTML(p.readingDate)}</p><div id="transfer-record-status" class="transfer-status ${record.status === 'confirmed-by-user' ? 'user-confirmed' : ''}">${transferStatus(record)}</div><div class="transfer-copy-list">${values.map(([key, label, value]) => `<div class="transfer-copy-row"><div><small>${label}</small><strong>${escapeHTML(value)}</strong></div><button class="text-button" data-transfer-copy="${key}" data-record-id="${id}" aria-label="Скопіювати: ${label}">Копіювати</button></div>`).join('')}</div><button class="button secondary full" data-transfer-copy="all" data-record-id="${id}">${icon('download')}Скопіювати всі дані</button><textarea id="transfer-copy-fallback" class="transfer-copy-fallback" readonly hidden aria-label="Дані для ручного копіювання"></textarea><div class="notice">Перенесіть значення у форму й натисніть відправлення на офіційному сайті. Вхід або перевірку виконуйте там.</div><a class="button primary full transfer-official-link" href="${channel.url}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" data-transfer-open="${id}">Відкрити ${channel.name} ↗</a><p class="transfer-modal-note">Жодні реквізити не додаються до посилання. Відкриття сторінки не надсилає показники.</p><button id="transfer-confirm-button" class="button secondary full" data-transfer-confirm="${id}" ${record.status === 'prepared' || record.status === 'confirmed-by-user' ? 'disabled' : ''}>${icon('check')}Я отримав підтвердження на сайті</button>${record.confirmedAt ? `<p class="transfer-confirmed-note">Позначено вами ${new Date(record.confirmedAt).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' })}${record.confirmationRef ? '<br>Ваша примітка: ' + escapeHTML(record.confirmationRef) : ''}</p>` : ''}`);
+    const p = record.payload, spec = TRANSFER_SERVICES[p.service ?? 'gas'], channel = spec.channels[p.channel], values = transferValues(p);
+    generalDialog(`<span class="eyebrow">${spec.name.toUpperCase()} · ${channel.name}</span><h2 id="general-title">Показники готові до передачі</h2><p>${escapeHTML(p.profileName)} · місяць ${escapeHTML(p.period)} · знято ${escapeHTML(p.readingDate)}</p><div id="transfer-record-status" class="transfer-status ${record.status === 'confirmed-by-user' ? 'user-confirmed' : ''}">${transferStatus(record)}</div><div class="transfer-copy-list">${values.map(([key, label, value]) => `<div class="transfer-copy-row"><div><small>${label}</small><strong>${escapeHTML(value)}</strong></div><button class="text-button" data-transfer-copy="${key}" data-record-id="${id}" aria-label="Скопіювати: ${label}">Копіювати</button></div>`).join('')}</div><button class="button secondary full" data-transfer-copy="all" data-record-id="${id}">${icon('download')}Скопіювати всі дані</button><textarea id="transfer-copy-fallback" class="transfer-copy-fallback" readonly hidden aria-label="Дані для ручного копіювання"></textarea><div class="notice">Перенесіть значення у форму й натисніть відправлення на офіційному сайті. Вхід або перевірку виконуйте там.</div><a class="button primary full transfer-official-link" href="${channel.url}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" data-transfer-open="${id}">Відкрити ${channel.name} ↗</a><p class="transfer-modal-note">Жодні реквізити не додаються до посилання. Відкриття сторінки не надсилає показники.</p><button id="transfer-confirm-button" class="button secondary full" data-transfer-confirm="${id}" ${record.status !== 'opened' ? 'disabled' : ''}>${icon('check')}Я отримав підтвердження на сайті</button>${record.confirmedAt ? `<p class="transfer-confirmed-note">Позначено вами ${new Date(record.confirmedAt).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' })}${record.confirmationRef ? '<br>Ваша примітка: ' + escapeHTML(record.confirmationRef) : ''}</p>` : ''}`);
   }
   async function copyTransferValue(id, key) {
     const record = findTransfer(id); if (!record) return;
-    const value = key === 'all' ? gasTransferText(record.payload) : ['account', 'surnamePrefix', 'phone', 'previous', 'current'].includes(key) ? record.payload[key] : '';
+    const value = key === 'all' ? transferText(record.payload) : transferValues(record.payload).find(row => row[0] === key)?.[2];
     if (!value) return;
-    try { await navigator.clipboard.writeText(value); toast(key === 'all' ? 'Дані скопійовано. Вставте їх у поля офіційної форми.' : 'Значення скопійовано'); }
+    try { await navigator.clipboard.writeText(value); toast(key === 'all' ? 'Дані скопійовано. Використайте їх під час заповнення офіційної форми.' : 'Значення скопійовано'); }
     catch { const area = $('#transfer-copy-fallback'); if (!area) return; area.hidden = false; area.value = value; area.focus(); area.select(); toast('Виділіть і скопіюйте текст вручну — доступ до буфера недоступний.'); }
   }
   function confirmTransferByUser(id) {
     const record = findTransfer(id); if (!record || record.status !== 'opened') return;
-    generalDialog(`<h2 id="general-title">Зберегти власну відмітку</h2><p>Показник ${escapeHTML(record.payload.current)} м³ · рахунок ${maskAccount(record.payload.account)}. Перевірте, що офіційний сервіс справді підтвердив прийняття.</p><form id="transfer-confirm-form"><label class="transfer-ack"><input id="transfer-ack" type="checkbox" required><span>Я побачив підтвердження прийняття на сайті постачальника.</span></label><label for="transfer-confirmation-ref">Номер або примітка до підтвердження (необов’язково)</label><input id="transfer-confirmation-ref" maxlength="120" autocomplete="off" placeholder="Наприклад, номер звернення"><p class="transfer-local-note">Буде збережено статус «Позначено вами як передане». Автоматичної перевірки постачальника немає.</p><button class="button primary full" type="submit">Зберегти відмітку</button></form>`);
-    $('#transfer-confirm-form').addEventListener('submit', e => {
-      e.preventDefault(); if (!$('#transfer-ack').checked) return;
+    generalDialog(`<h2 id="general-title">Зберегти власну відмітку</h2><p>${escapeHTML(transferReadingSummary(record.payload))} · рахунок ${maskAccount(record.payload.account)}. Перевірте, що офіційний сервіс справді підтвердив прийняття.</p><form id="transfer-confirm-form"><label class="transfer-ack"><input id="transfer-ack" type="checkbox" required><span>Я побачив підтвердження прийняття на сайті постачальника.</span></label><label for="transfer-confirmation-ref">Номер або примітка до підтвердження (необов’язково)</label><input id="transfer-confirmation-ref" maxlength="120" autocomplete="off" placeholder="Наприклад, номер звернення"><p class="transfer-local-note">Буде збережено статус «Позначено вами як передане». Автоматичної перевірки постачальника немає.</p><button class="button primary full" type="submit">Зберегти відмітку</button></form>`);
+    $('#transfer-confirm-form').addEventListener('submit', event => {
+      event.preventDefault(); if (!$('#transfer-ack').checked) return;
       const liveRecord = findTransfer(id); if (!liveRecord || liveRecord.status !== 'opened') { toast('Запис змінився в іншій вкладці. Відкрийте його ще раз.'); return; }
       liveRecord.status = 'confirmed-by-user'; liveRecord.confirmedAt = new Date().toISOString(); liveRecord.confirmationRef = $('#transfer-confirmation-ref').value.trim(); persist(); closeDialog($('#general-dialog')); renderTransferJournal(); toast(storageOK ? 'Позначено вами як передане. Відмітку збережено.' : 'Відмітка лише в пам’яті вкладки: збереження недоступне.');
     });
@@ -517,8 +588,8 @@
   document.addEventListener('input', e => {
     const el = e.target;
     if (el.dataset.transferSetting || el.dataset.transferReading) {
-      if (el.dataset.transferSetting === 'account') profile().gasTransfer.accounts[profile().gasTransfer.channel] = el.value;
-      else if (el.dataset.transferSetting) profile().gasTransfer[el.dataset.transferSetting] = el.value;
+      if (el.dataset.transferSetting === 'account') transferConfig().accounts[transferConfig().channel] = el.value;
+      else if (el.dataset.transferSetting) transferConfig()[el.dataset.transferSetting] = el.value;
       if (el.dataset.transferReading) draft()[el.dataset.transferReading] = el.value;
       persist(); updateCalculation();
       el.setAttribute('aria-invalid', 'false'); const feedback = $(`#transfer-error-${el.id.replace('transfer-', '')}`); if (feedback) feedback.textContent = '';
@@ -535,7 +606,12 @@
   });
   document.addEventListener('change', e => {
     const el = e.target;
-    if (el.id === 'transfer-channel' && Object.hasOwn(GAS_CHANNELS, el.value)) { profile().gasTransfer.channel = el.value; persist(); renderTransfer(); }
+    if (el.id === 'transfer-channel' && Object.hasOwn(transferSpec().channels, el.value)) {
+      const config = transferConfig();
+      if (profile().transferService === 'electricity' && !config.accounts[el.value]) config.accounts[el.value] = config.accounts[config.channel];
+      config.channel = el.value; persist(); renderTransfer();
+    }
+    if (el.id === 'transfer-zone' && ['single', 'dual'].includes(el.value)) { draft().zone = el.value; persist(); renderDashboard(); renderTransfer(); }
     if (el.id === 'transfer-period') {
       if (!validPeriod(el.value) || el.value > todayKyiv().slice(0, 7)) { el.value = state.period; toast('Оберіть поточний або минулий місяць'); return; }
       state.period = el.value; draft(); persist(); renderDashboard(); renderTransfer();
@@ -556,10 +632,11 @@
       return; // Native anchor opens only the constant official URL, without account data.
     }
     const button = e.target.closest('button'); if (!button) return;
+    if (button.dataset.transferService && Object.hasOwn(TRANSFER_SERVICES, button.dataset.transferService)) { profile().transferService = button.dataset.transferService; persist(); switchView('transfer', { focus: true }); return; }
     if (button.dataset.transferRecord) { showTransferRecord(button.dataset.transferRecord); return; }
     if (button.dataset.transferCopy) { copyTransferValue(button.dataset.recordId, button.dataset.transferCopy); return; }
     if (button.dataset.transferConfirm) { confirmTransferByUser(button.dataset.transferConfirm); return; }
-    if (button.dataset.transferDelete) { confirmAction('Видалити запис передачі?', 'Це видалить локальний запис і його реквізити з журналу цього помешкання.', () => { profile().gasTransfer.records = profile().gasTransfer.records.filter(r => r.id !== button.dataset.transferDelete); persist(); renderTransferJournal(); }, 'Видалити запис'); return; }
+    if (button.dataset.transferDelete) { const id = button.dataset.transferDelete; confirmAction('Видалити запис передачі?', 'Це видалить локальний запис і його реквізити з журналу цього помешкання.', () => { const owner = transferOwner(id); if (owner) owner.config.records = owner.config.records.filter(record => record.id !== id); persist(); renderTransferJournal(); }, 'Видалити запис'); return; }
     if (button.hasAttribute('data-close')) { closeDialog(button.closest('dialog')); return; }
     if (button.dataset.view) { switchView(button.dataset.view, { focus: true }); return; }
     if (button.dataset.zone) { draft().zone = button.dataset.zone; persist(); renderServices(); return; }
@@ -579,7 +656,7 @@
       refresh: () => refreshRates(),
       'apply-rates': () => { if (!Object.keys(candidates).length) return; if (!profile().manual) profile().rates = { ...REFERENCE_RATES }; Object.assign(profile().rates, candidates); profile().manual = true; persist(); renderDashboard(); renderTariffs(); toast('Ставки застосовано. Звірте нічний тариф і період дії.'); },
       export: () => requirePremium(exportBackup), import: () => requirePremium(importBackup),
-      'clear-transfer-details': () => confirmAction('Очистити реквізити форми?', 'Буде очищено обидва особові рахунки, літери прізвища та телефон у формі. Записи журналу з їхніми реквізитами можна видалити окремо.', () => { const records = profile().gasTransfer.records; profile().gasTransfer = { ...makeGasTransfer(), records }; persist(); renderTransfer(); }, 'Очистити')
+      'clear-transfer-details': () => { const service = profile().transferService, spec = transferSpec(); confirmAction('Очистити реквізити цієї послуги?', `Буде очищено реквізити форми «${spec.name}». Записи її журналу з реквізитами можна видалити окремо.`, () => { const records = profile()[spec.key].records; profile()[spec.key] = { ...makeTransfer(service), records }; persist(); renderTransfer(); }, 'Очистити'); }
     };
     actions[button.dataset.action]?.();
   });
