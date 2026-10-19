@@ -18,7 +18,8 @@
     "test:browser": "node tests/browser.cjs",
     "test:transfer": "node tests/transfer.cjs",
     "test:networks": "node tests/networks.cjs",
-    "test:premium": "node tests/premium-browser.cjs"
+    "test:premium": "node tests/premium-browser.cjs",
+    "test:view": "node tests/view-mode.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

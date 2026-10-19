@@ -32,6 +32,7 @@ const screenshotDir = process.env.SCREENSHOT_DIR || path.resolve(__dirname, '../
     await click('.nav-item[data-view="history"]');
     assert.equal(await page.locator('#premium-dialog').isVisible(), true);
     await page.fill('#activation-key', 'AAAA-BBBB-CCCC-DDDD'); await click('#premium-form button');
+    await page.waitForFunction(() => document.querySelector('#key-feedback')?.textContent.includes('Промокод недоступний'));
     assert.match(await page.locator('#key-feedback').textContent(), /Промокод недоступний/);
     await page.fill('#activation-key', 'TEST-ONLY-FREE-CODE'); await click('#premium-form button');
     await page.waitForSelector('#premium-dialog', { state: 'hidden' });

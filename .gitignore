@@ -26,3 +26,6 @@ public/admin.css
 .dev.vars*
 
 *.tsbuildinfo
+
+public/view-mode.js
+public/view-mode.css
