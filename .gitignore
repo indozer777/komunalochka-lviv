@@ -29,3 +29,6 @@ public/admin.css
 
 public/view-mode.js
 public/view-mode.css
+
+public/email-account.js
+public/email-account.css

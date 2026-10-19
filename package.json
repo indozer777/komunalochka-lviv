@@ -14,12 +14,13 @@
     "db:generate": "drizzle-kit generate",
     "predev": "node scripts/prepare-assets.mjs",
     "prebuild": "node scripts/prepare-assets.mjs",
-    "test": "node --test tests/core.test.cjs tests/premium.test.mjs",
+    "test": "node --test tests/core.test.cjs tests/premium.test.mjs tests/email-auth.test.mjs",
     "test:browser": "node tests/browser.cjs",
     "test:transfer": "node tests/transfer.cjs",
     "test:networks": "node tests/networks.cjs",
     "test:premium": "node tests/premium-browser.cjs",
-    "test:view": "node tests/view-mode.cjs"
+    "test:view": "node tests/view-mode.cjs",
+    "test:email": "node tests/email-browser.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -45,7 +46,8 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "3.6.0",
     "vaul": "^1.1.2",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@supabase/supabase-js": "2.118.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
@@ -67,7 +69,8 @@
     "typescript": "5.9.3",
     "vinext": "1.0.0-beta.5",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.92.0",
+    "esbuild": "0.28.0"
   },
   "type": "module",
   "overrides": {

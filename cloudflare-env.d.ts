@@ -4,5 +4,8 @@ declare namespace Cloudflare {
     BUCKET?: R2Bucket;
     PREMIUM_ADMIN_EMAIL?: string;
     PREMIUM_ALLOWED_ORIGINS?: string;
+    EMAIL_LOGIN_ENABLED?: string;
+    SUPABASE_URL?: string;
+    SUPABASE_PUBLISHABLE_KEY?: string;
   }
 }

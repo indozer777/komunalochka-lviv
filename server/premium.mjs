@@ -4,7 +4,7 @@ class ApiError extends Error { constructor(status, message) { super(message); th
 const fail = (status, message) => { throw new ApiError(status, message); };
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: {
   'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store',
-  'Vary': 'Cookie, oai-authenticated-user-id', 'X-Content-Type-Options': 'nosniff',
+  'Vary': 'Cookie, Authorization, oai-authenticated-user-id', 'X-Content-Type-Options': 'nosniff',
 } });
 const query = (db, sql, args = []) => db.prepare(sql).bind(...args);
 const all = async (db, sql, args) => (await query(db, sql, args).all()).results;
@@ -21,7 +21,7 @@ export function generatePromoCode() {
   const code = [...crypto.getRandomValues(new Uint8Array(16))].map(n => alphabet[n % alphabet.length]).join('');
   return code.match(/.{4}/g).join('-');
 }
-const administrator = (user, email) => Boolean(user?.userId && user?.email && email && user.email.toLowerCase() === email.trim().toLowerCase());
+const administrator = (user, email) => Boolean(user?.authProvider !== 'email' && user?.userId && user?.email && email && user.email.toLowerCase() === email.trim().toLowerCase());
 function authorized(context) {
   if (!context.user?.userId || !context.user?.email) fail(401, 'Увійдіть через ChatGPT, щоб продовжити.');
   if (!context.db) fail(503, 'Сервіс Premium тимчасово недоступний. Розрахунки працюють як раніше.');
@@ -71,7 +71,7 @@ async function accessFor(db, userId, now) {
 }
 async function session(context, now) {
   const { db, user } = context;
-  const base = { signIn: context.signIn || '/signin-with-chatgpt?return_to=%2F%3Fpremium%3D1', signOut: context.signOut || '/signout-with-chatgpt?return_to=%2F', serverTime: now };
+  const base = { authProvider: user ? (user.authProvider === 'email' ? 'email' : 'sites') : null, hasSiteSession: Boolean(context.hasSiteSession), signIn: context.signIn || '/signin-with-chatgpt?return_to=%2F%3Fpremium%3D1', signOut: context.signOut || '/signout-with-chatgpt?return_to=%2F', serverTime: now };
   if (!user?.userId || !user?.email) return { ...base, user: null, isAdmin: false, access: { active: false, expiresAt: null, source: null }, request: null };
   authorized(context);
   const isAdmin = administrator(user, context.adminEmail);

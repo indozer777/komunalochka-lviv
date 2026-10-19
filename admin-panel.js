@@ -35,7 +35,7 @@
       if (session.error) throw new Error(session.error);
       if (!session.user || !session.isAdmin) {
         $('#admin-workspace').hidden = true; $('#admin-gate').hidden = false;
-        $('#admin-gate').innerHTML = `<span class="eyebrow">КЕРУВАННЯ PREMIUM</span><h1>${session.user ? 'Цей акаунт не є адміністратором' : 'Увійдіть як власник сайту'}</h1><p>Доступ перевіряється сервером для кожної дії.</p><a class="button primary" href="${esc(session.user ? session.signOut : session.signIn.replace(encodeURIComponent('/?premium=1'), encodeURIComponent('/admin')))}" target="_top">${session.user ? 'Вийти з цього акаунта' : 'Увійти через ChatGPT'}</a>`;
+        $('#admin-gate').innerHTML = `<span class="eyebrow">КЕРУВАННЯ PREMIUM</span><h1>${session.user ? 'Цей акаунт не є адміністратором' : 'Увійдіть як власник сайту'}</h1><p>Доступ перевіряється сервером для кожної дії.</p>${session.authProvider === 'email' ? '<p>Для керування сайтом увійдіть акаунтом власника через ChatGPT.</p><button class="button primary" data-email-signout>Вийти з цього акаунта</button>' : `<a class="button primary" href="${esc(session.user ? session.signOut : session.signIn.replace(encodeURIComponent('/?premium=1'), encodeURIComponent('/admin')))}" target="_top">${session.user ? 'Вийти з цього акаунта' : 'Увійти через ChatGPT'}</a>`}`;
         return;
       }
       data = await api('');
@@ -90,5 +90,6 @@
     finally { button.disabled = false; }
   });
   $('#admin-dialog').addEventListener('click', event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog(); } });
+  window.addEventListener('komunal-auth-change', () => load());
   load();
 })();
