@@ -64,3 +64,39 @@ test('безпечний HTML та місяці', () => {
   assert.equal(core.escapeHTML('<img src=x onerror="alert(1)">'), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
   assert.equal(core.validPeriod('2026-10'), true); for (const month of ['2026-13', '2026-00', '2019-12', '2026-1', '__proto__']) assert.equal(core.validPeriod(month), false);
 });
+
+const transferExample = () => ({ channel: 'grmu', account: '0900123456', surnamePrefix: '', phone: '', previous: '1250', current: '1278', readingDate: '2026-10-01', period: '2026-09', profileName: 'Моя оселя', address: '' });
+test('газова передача готує накопичений показник, а не спожиті куби', () => {
+  const { payload, errors } = core.prepareGasTransfer(transferExample(), '2026-10-19');
+  assert.deepEqual(errors, {}); assert.equal(payload.current, '1278');
+  assert.match(core.gasTransferText(payload), /Поточний показник: 1278 м³/);
+  assert.equal(core.GAS_CHANNELS.grmu.url, 'https://my.grmu.com.ua/login');
+  assert.equal(core.GAS_CHANNELS.naftogaz.url, 'https://gas.ua/uk/indicators');
+});
+test('окремі реквізити Нафтогазу: прізвище і телефон нормалізуються', () => {
+  const r = core.prepareGasTransfer({ ...transferExample(), channel: 'naftogaz', account: '123456789', surnamePrefix: 'іва', phone: '067 123-45-67' }, '2026-10-19');
+  assert.deepEqual(r.errors, {}); assert.equal(r.payload.surnamePrefix, 'ІВА'); assert.equal(r.payload.phone, '+380671234567');
+  const missing = core.prepareGasTransfer({ ...transferExample(), channel: 'naftogaz' }, '2026-10-19');
+  assert.ok(missing.errors.account); assert.ok(missing.errors.phone); assert.ok(missing.errors.surnamePrefix);
+});
+test('передача відкидає дробові, зворотні показники, неправильні рахунки й майбутні дати', () => {
+  for (const patch of [{ current: '1278.1' }, { current: '1' }, { current: '-1' }, { account: 'meter-1234' }, { readingDate: '2026-02-30' }, { readingDate: '2026-10-20' }, { period: '2026-11' }, { channel: '__proto__' }]) {
+    const r = core.prepareGasTransfer({ ...transferExample(), ...patch }, '2026-10-19'); assert.equal(r.payload, null, JSON.stringify(patch));
+  }
+  const zero = core.prepareGasTransfer({ ...transferExample(), current: '00000', previous: '0' }, '2026-10-19'); assert.equal(zero.payload.current, '00000');
+});
+test('старі v1-копії мігрують без втрати помешкань, показників і місячних записів', () => {
+  const state = core.makeState(), p = state.profiles[0]; delete p.gasTransfer;
+  p.drafts[state.period] = example(); p.history.push({ period: state.period, savedAt: new Date().toISOString(), draft: example(), rates });
+  const restored = core.normalizeState(state).profiles[0]; assert.deepEqual(restored.gasTransfer, core.makeGasTransfer()); assert.equal(restored.history[0].result.total, 1590.5); assert.equal(restored.drafts[state.period].gasCurrent, '1278');
+});
+test('журнал не приймає статус прийняття від провайдера або підроблену послідовність', () => {
+  const transfer = core.makeGasTransfer(), payload = core.prepareGasTransfer(transferExample(), '2026-10-19').payload;
+  const record = { id: 'record-1', payload, status: 'prepared', createdAt: '2026-10-19T12:00:00.000Z', openedAt: null, confirmedAt: null, confirmationRef: '' };
+  transfer.records.push(record); assert.equal(core.normalizeGasTransfer(transfer).records.length, 1);
+  for (const status of ['accepted', 'sent', 'success', 'confirmed-by-user']) { record.status = status; assert.throws(() => core.normalizeGasTransfer(transfer)); }
+  record.status = 'opened'; record.openedAt = '2026-10-19T12:01:00.000Z'; assert.equal(core.normalizeGasTransfer(transfer).records[0].status, 'opened');
+  record.status = 'confirmed-by-user'; record.confirmedAt = '2026-10-19T12:02:00.000Z'; record.confirmationRef = 'Власна примітка'; assert.equal(core.normalizeGasTransfer(transfer).records[0].confirmationRef, 'Власна примітка');
+  record.confirmedAt = '2026-10-19T11:00:00.000Z'; assert.throws(() => core.normalizeGasTransfer(transfer));
+  transfer.channel = '__proto__'; assert.throws(() => core.normalizeGasTransfer(transfer));
+});

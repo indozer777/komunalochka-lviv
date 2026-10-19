@@ -23,3 +23,59 @@ body[data-theme=dark]{--bg:#141d30;--surface:#1c273c;--text:#e3e9f6;--muted:#8f9
 body[data-theme=dark] .breakdown-row strong{color:#becce5}
 body[data-theme=dark] .tariff-line strong{color:#a5b8d9}
 body[data-theme=dark] .secondary{color:#afbed8}
+/* Guided gas readings: the actual submission is completed on the provider's site. */
+.transfer-shortcut{color:var(--primary);border-color:#dce5ff;background:var(--soft-blue)}
+.transfer-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:0 0 25px}
+.transfer-steps>span{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px}
+.transfer-steps b{height:28px;width:28px;display:grid;place-items:center;background:var(--soft-blue);color:var(--primary);border-radius:9px;font-size:11px;flex-shrink:0}
+.transfer-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px;align-items:start}
+.transfer-layout .panel-heading h2{display:flex;align-items:center;gap:8px;font-size:15px}
+.transfer-layout .panel-heading h2 svg{width:19px;height:19px;color:var(--gas)}
+.transfer-layout .pill{font-size:6px;letter-spacing:.7px;background:var(--soft-blue);border-color:var(--line)}
+#gas-transfer-form>label{margin-bottom:7px}
+#gas-transfer-form>select{font-size:12px}
+.transfer-channel-help{margin:10px 0 22px!important;font-size:10px!important}
+.transfer-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 17px}
+.transfer-field label{font-size:10px;margin:0 0 7px}
+.transfer-field input{font-size:13px}
+.transfer-field small{display:block;font-size:9px;color:var(--muted);line-height:1.7;margin-top:6px}
+.transfer-field .field-error{margin-top:5px;min-height:14px}
+.transfer-readings-note{align-self:center;font-size:10px;color:var(--muted);line-height:1.9;border-left:2px solid #cbd8ff;padding:0 0 0 12px}
+.transfer-local-note{font-size:9px!important;margin:12px 0!important;line-height:1.8}
+.transfer-guide-icon{height:43px;width:43px;display:grid;place-items:center;background:var(--soft-blue);color:var(--primary);border-radius:12px;margin-bottom:16px}
+.transfer-guide h2{font-size:15px;line-height:1.65;margin-bottom:12px}
+.transfer-guide .notice{font-size:10px;line-height:1.9;margin:18px 0}
+.transfer-guide a{font-size:10px;display:inline-block;margin-top:16px;text-decoration:none}
+.transfer-empty{text-align:center;padding:35px 15px;color:var(--muted);font-size:11px;border:1px dashed var(--line);border-radius:10px;margin-top:20px}
+.transfer-journal-row{display:flex;align-items:center;gap:13px;padding:19px 0;border-bottom:1px solid var(--line)}
+.transfer-journal-row:last-child{border-bottom:0}
+.transfer-journal-main{flex:1;min-width:0}
+.transfer-journal-main h3{font-size:14px;margin-bottom:3px}
+.transfer-journal-main h3 span{font-weight:500;font-size:11px;color:var(--muted)}
+.transfer-journal-main p{font-size:9px!important}
+.transfer-journal-actions{display:flex;gap:9px;align-items:center;flex-shrink:0}
+.transfer-status{display:inline-flex;align-items:center;font-size:9px;line-height:1.7;color:#9f8246;background:#fbf3df;border:1px solid #f1e4c3;padding:3px 7px;border-radius:5px;margin-top:8px}
+.transfer-status.user-confirmed{background:#edf8f2;color:#609078;border-color:#d6ece0}
+#transfer-record-status{margin:12px 0 5px}
+.transfer-copy-list{margin:12px 0 20px}
+.transfer-copy-row{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px 0;border-bottom:1px solid var(--line)}
+.transfer-copy-row small{display:block;font-size:10px;color:var(--muted);margin-bottom:2px}
+.transfer-copy-row strong{font-size:16px;font-weight:750;letter-spacing:.2px}
+.transfer-copy-fallback{display:block;width:100%;height:145px;margin-top:12px;padding:12px;border-radius:9px;border:1px solid var(--line);background:var(--input);color:var(--text);font:11px/1.8 ui-monospace,monospace;resize:vertical}
+.transfer-official-link{text-decoration:none}
+.transfer-modal-note{font-size:9px!important;margin:10px 0 16px}
+#transfer-confirm-button:disabled{cursor:not-allowed;opacity:.5;box-shadow:none}
+.transfer-ack{display:flex;gap:10px;align-items:flex-start;margin:23px 0;font-size:11px;line-height:1.9;color:var(--text)}
+.transfer-ack input{flex-shrink:0;margin-top:3px}
+.transfer-confirmed-note{font-size:10px!important;margin-top:15px;color:#6e9a82!important;overflow-wrap:anywhere}
+body[data-theme=dark] .transfer-status{background:#3d3426;color:#dbc285;border-color:#5d5036}
+body[data-theme=dark] .transfer-status.user-confirmed{background:#233f35;color:#a4d1ba;border-color:#3c6353}
+@media(max-width:1170px){.transfer-layout{grid-template-columns:minmax(0,1fr) 230px}.transfer-form-grid{gap:10px 14px}.transfer-layout .panel-heading{align-items:flex-start}.transfer-layout .panel-heading .pill{font-size:5px}}
+@media(max-width:980px){.transfer-layout{grid-template-columns:1fr}.transfer-guide{display:none}.transfer-steps{gap:10px}.transfer-steps>span{font-size:9px;gap:7px}}
+@media(max-width:720px){.nav-item{flex-shrink:0}.transfer-steps>span{font-size:8px;align-items:flex-start}.transfer-steps b{width:23px;height:23px;border-radius:7px;font-size:9px}.transfer-layout .panel-heading h2{font-size:14px}}
+@media(max-width:460px){.transfer-steps{gap:7px}.transfer-steps>span{display:block;font-size:8px}.transfer-steps b{margin-bottom:7px}.transfer-form-grid{grid-template-columns:1fr;gap:9px}.transfer-readings-note{margin-bottom:12px}.transfer-journal-row{gap:10px;align-items:flex-start}.transfer-journal-row>.service-icon{display:none}.transfer-journal-main p{font-size:8px!important}.transfer-journal-actions{gap:3px;flex-direction:column}.transfer-journal-actions .icon-button{height:25px}.transfer-journal-actions .text-button{font-size:9px}.transfer-status{font-size:8px}.transfer-copy-row strong{font-size:15px}.transfer-local-note{font-size:8px!important}.transfer-layout .panel-heading .pill{font-size:5px}.transfer-guide{display:block}.transfer-guide h2{font-size:14px}}
+.transfer-month-control{position:relative;min-height:46px;padding:11px 12px;border:1px solid var(--line);background:var(--input);border-radius:9px;font-size:13px;text-transform:capitalize}
+.transfer-month-control input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.transfer-month-control input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.transfer-month-control:focus-within{outline:3px solid #97b3ff;outline-offset:3px}
+.transfer-month-control:has(input[aria-invalid=true]){border-color:#da6b76}
