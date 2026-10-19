@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+coverage/
+test-results/
+playwright-report/
+*.log
+.sites-local/
+.codex/
+*.zip

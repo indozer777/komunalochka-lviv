@@ -1,0 +1,13 @@
+{
+  "name": "komunalochka-lviv",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Український калькулятор комунальних послуг для мешканців Львова",
+  "scripts": {
+    "start": "python3 -m http.server 4173 --bind 127.0.0.1",
+    "test": "node --test tests/core.test.cjs",
+    "test:browser": "node tests/browser.cjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
