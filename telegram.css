@@ -18,3 +18,4 @@ html[data-view-mode=comfortable] #view-reminders .telegram-note,html[data-view-m
 @media(min-width:1001px){html[data-view-mode=comfortable] #navigation{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1000px){.telegram-layout{grid-template-columns:1fr}}
 @media(max-width:460px){.telegram-date-fields{grid-template-columns:1fr}.telegram-connected>.button{width:100%}.telegram-reminder{padding:16px}.telegram-reminder-actions .button{flex:1}#view-reminders .panel{padding:22px 18px}}
+@media(max-width:360px){html[data-view-mode=comfortable] .nav-item{justify-content:center;text-align:center;gap:0}html[data-view-mode=comfortable] .nav-item>:is([data-icon],svg){display:none}}
