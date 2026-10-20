@@ -69,7 +69,10 @@ async function telegram(context, method, body) {
     const data = await response.json();
     if (!data.ok) { const error = new Fault(502, 'Telegram тимчасово недоступний.'); error.telegramCode = data.error_code; error.retryAfter = data.parameters?.retry_after; throw error; }
     return data.result;
-  } catch (error) { if (error instanceof Fault) throw error; const safe = new Fault(502, 'Не вдалося зв’язатися з Telegram.'); safe.uncertain = true; throw safe; }
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'telegram_transport_failed', method, code: Number.isInteger(error.telegramCode) ? error.telegramCode : null, uncertain: !(error instanceof Fault) }));
+    if (error instanceof Fault) throw error; const safe = new Fault(502, 'Не вдалося зв’язатися з Telegram.'); safe.uncertain = true; throw safe;
+  }
 }
 const configured = env => Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.TELEGRAM_CRON_SECRET && /^[A-Za-z0-9_]{5,32}$/.test(env.TELEGRAM_BOT_USERNAME || ''));
 async function status(context, now) {
@@ -229,7 +232,15 @@ export async function handleTelegramRequest(request, context) {
       if (binding) await unlinkChat(db, binding.chat_id);
       await q(db, 'DELETE FROM telegram_links WHERE user_id=?', [user.userId]).run(); return json(await status(context, now));
     }
-    if (!await q(db, 'SELECT 1 FROM telegram_bindings WHERE user_id=?', [user.userId]).first()) fail(409, 'Спочатку підключіть Telegram.');
+    const ownBinding = await q(db, 'SELECT chat_id FROM telegram_bindings WHERE user_id=?', [user.userId]).first();
+    if (!ownBinding) fail(409, 'Спочатку підключіть Telegram.');
+    if (path === '/test') {
+      const windowStart = Math.floor(now / MINUTE) * MINUTE;
+      const limit = await q(db, `INSERT INTO premium_limits(key,window_start,attempts) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start,attempts=CASE WHEN premium_limits.window_start=excluded.window_start THEN premium_limits.attempts+1 ELSE 1 END RETURNING attempts`, ['telegram-test:' + user.userId, windowStart]).first();
+      if (limit.attempts > 1) fail(429, 'Тестове повідомлення можна надіслати раз на хвилину.');
+      await telegram(context, 'sendMessage', { chat_id: ownBinding.chat_id, text: 'Усе працює! Це перевірка підключення КомуналОчки. Нагадування про оплату й показники надходитимуть у вибрані вами дні.', reply_markup: { inline_keyboard: [[{ text: 'Мої нагадування', url: SITE + '/#reminders' }]] } });
+      return json(await status(context, now));
+    }
     if (path === '/reminders') {
       const value = validateReminder(body);
       const result = await q(db, `INSERT INTO telegram_reminders(id,user_id,service,kind,day,time,next_due,created_at,updated_at)

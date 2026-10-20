@@ -117,6 +117,14 @@ test('Telegram 429 повторюється з затримкою, невизн�
   assert.equal(s.sql.prepare('select status from telegram_deliveries').get().status, 'failed');
   s.advance(DAY); assert.equal((await s.tick()).failed, 0);
 });
+test('тестове повідомлення йде лише у власний чат і обмежене одним на хвилину', async () => {
+  const s = setup(), who = await s.bind(); s.calls.length = 0;
+  assert.equal((await s.call(user('unbound'), '/test', { chat_id: '999' })).status, 409);
+  assert.equal((await s.call(who, '/test', { chat_id: '999' })).status, 200);
+  assert.equal(s.calls[0].body.chat_id, '123');
+  assert.equal((await s.call(who, '/test', {})).status, 429);
+  s.advance(MINUTE); assert.equal((await s.call(who, '/test', {})).status, 200);
+});
 test('блокування бота й /stop зупиняють надсилання', async () => {
   const s = setup(), who = await s.bind(); await s.reminder(who); s.advance(60 * MINUTE);
   s.transport(() => Response.json({ ok: false, error_code: 403 })); await s.tick(); assert.equal((await s.call(who, '/status')).binding, null);
