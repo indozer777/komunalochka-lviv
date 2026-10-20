@@ -1,0 +1,57 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const target = process.env.TEST_URL || 'http://127.0.0.1:4173';
+(async () => {
+  const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
+  try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1080 }, reducedMotion: 'reduce' });
+    await context.route('https://**/*', route => route.abort());
+    await require('./premium-fixture.cjs')(context);
+    const page = await context.newPage(), errors = [], ocrRequests = [];
+    page.on('pageerror', e => errors.push(e.message));
+    context.on('request', request => { if (request.url().includes('/vendor/ocr/')) { ocrRequests.push(request.url()); assert.equal(request.method(), 'GET'); } });
+    await page.goto(target); await page.waitForFunction(() => window.KomunalPremium?.getState().ready);
+    assert.equal(await page.locator('[data-meter-photo]').count(), 3); assert.equal(ocrRequests.length, 0);
+    await page.fill('#gasPrev', '1250');
+    const png = await page.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 1200; c.height = 320;
+      const ctx = c.getContext('2d'); ctx.fillStyle = 'white'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillStyle = 'black'; ctx.font = 'bold 144px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('001278', 600, 160);
+      return c.toDataURL('image/png').split(',')[1];
+    });
+    const image = { name: 'meter.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') };
+    await page.locator('[data-meter-photo=gasCurrent]').click();
+    await page.locator('#photo-gallery').setInputFiles(image);
+    await page.waitForFunction(() => Number(document.querySelector('#gasCurrent').value) === 1278, null, { timeout: 90000 });
+    assert.equal(await page.inputValue('#gasPrev'), '1250');
+    assert.match(await page.locator('#photo-result').innerText(), /1278/);
+    const state = await page.evaluate(() => JSON.parse(localStorage.getItem('komunalochka.lviv.v1')));
+    assert.equal(Number(state.profiles[0].drafts[state.period].gasCurrent), 1278);
+    assert(!JSON.stringify(state).includes('data:image')); assert(ocrRequests.some(url => url.endsWith('/worker.min.js')));
+    await fs.mkdir(path.resolve(__dirname, '../test-results/photo'), { recursive: true });
+    await page.screenshot({ path: path.resolve(__dirname, '../test-results/photo/recognized.png'), fullPage: false });
+    await page.locator('#photo-undo').click(); assert.equal(await page.inputValue('#gasCurrent'), '');
+    await page.locator('#photo-read').click();
+    await page.waitForFunction(() => Number(document.querySelector('#gasCurrent').value) === 1278, null, { timeout: 90000 });
+    await page.locator('#photo-done').click(); await page.reload(); assert.equal(Number(await page.inputValue('#gasCurrent')), 1278);
+    await page.locator('[data-zone=dual]').click(); assert.equal(await page.locator('[data-meter-photo]').count(), 4);
+    await page.locator('[data-meter-photo=nightCurrent]').click(); assert.match(await page.locator('#photo-title').innerText(), /ніч/);
+    await page.locator('#photo-gallery').setInputFiles({ name: 'bad.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') });
+    await page.waitForFunction(() => document.querySelector('#photo-status').textContent.includes('Не вдалося відкрити'));
+    assert.equal(await page.inputValue('#nightCurrent'), ''); await page.locator('#photo-close').click();
+    await page.locator('[data-meter-photo=waterCurrent]').click(); await page.locator('#photo-gallery').setInputFiles(image); await page.locator('#photo-close').click();
+    await page.waitForTimeout(1000); assert.equal(await page.inputValue('#waterCurrent'), '');
+    await page.locator('[data-include=gas]').uncheck(); assert.equal(await page.locator('[data-meter-photo=gasCurrent]').isDisabled(), true);
+    await page.setViewportSize({ width: 320, height: 844 }); await page.locator('[data-display-open]').click();
+    await page.getByRole('radio', { name: /Зручний перегляд/ }).check(); await page.getByRole('button', { name: 'Готово, до розрахунків' }).click();
+    await page.locator('[data-meter-photo=waterCurrent]').click();
+    assert.equal(await page.evaluate(() => document.querySelector('#meter-photo-dialog').scrollWidth <= document.querySelector('#meter-photo-dialog').clientWidth), true);
+    await page.screenshot({ path: path.resolve(__dirname, '../test-results/photo/mobile.png'), fullPage: false });
+    await page.keyboard.press('Escape'); assert.equal(await page.locator('#meter-photo-dialog').isVisible(), false);
+    assert.deepEqual(errors, []);
+    console.log('Photo OCR: real local WASM recognition, autofill, persistence, undo, zone targeting, invalid images, cancellation, no photo storage, mobile and keyboard — OK');
+    await context.close();
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

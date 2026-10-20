@@ -1,4 +1,4 @@
-/* КомуналОчка. Buildless ES2020; no runtime dependencies. */
+/* КомуналОчка. Vanilla ES2020; photo OCR loads only when requested. */
 (function () {
   'use strict';
 
@@ -312,7 +312,27 @@
   function requirePremium(action) { if (!premium()) { openPremium(); return; } action(); }
 
   function field(key, label, placeholder, value = draft()[key]) {
-    return `<div class="field"><label for="${key}">${label}</label><input id="${key}" data-field="${key}" type="text" inputmode="${key === 'residents' ? 'numeric' : 'decimal'}" maxlength="24" value="${escapeHTML(value)}" placeholder="${placeholder}" autocomplete="off" aria-describedby="error-${key}"><div id="error-${key}" class="field-error" aria-live="polite"></div></div>`;
+    const photoLabels = { gasCurrent: 'Газ', waterCurrent: 'Вода', dayCurrent: draft().zone === 'dual' ? 'Електрика · день' : 'Електрика', nightCurrent: 'Електрика · ніч' };
+    const photo = photoLabels[key] ? `<button type="button" class="meter-photo-button" data-meter-photo="${key}" aria-label="Заповнити з фото: ${photoLabels[key]}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l1-2h6l1 2h4a1 1 0 0 1 1 1v14H3V6a1 1 0 0 1 1-1z"/><circle cx="12" cy="12" r="4"/></svg>Заповнити з фото</button>` : '';
+    return `<div class="field"><label for="${key}">${label}</label><input id="${key}" data-field="${key}" type="text" inputmode="${key === 'residents' ? 'numeric' : 'decimal'}" maxlength="24" value="${escapeHTML(value)}" placeholder="${placeholder}" autocomplete="off" aria-describedby="error-${key}"><div id="error-${key}" class="field-error" aria-live="polite"></div>${photo}</div>`;
+  }
+  function openMeterPhoto(key) {
+    const spec = { gasCurrent: ['gas', 'Газ', 'м³', 'gasPrev'], waterCurrent: ['water', 'Вода', 'м³', 'waterPrev'], dayCurrent: ['electricity', draft().zone === 'dual' ? 'Електрика · день' : 'Електрика', 'кВт·год', 'dayPrev'], nightCurrent: ['electricity', 'Електрика · ніч', 'кВт·год', 'nightPrev'] }[key];
+    if (!spec || !draft().includes[spec[0]] || (key === 'nightCurrent' && draft().zone !== 'dual')) return;
+    if (!window.KomunalMeterPhoto) { toast('Оновіть сторінку, щоб завантажити розпізнавання фото.'); return; }
+    const id = state.activeId, period = state.period, zone = draft().zone, original = draft()[key]; let expected = original;
+    const validContext = () => state.activeId === id && state.period === period && draft().zone === zone && draft().includes[spec[0]] && draft()[key] === expected && Boolean($(`#${key}`));
+    const set = value => { draft()[key] = value; expected = value; $(`#${key}`).value = value; persist(); updateCalculation(); };
+    const changed = 'Розрахунок змінився під час розпізнавання. Закрийте фото й відкрийте його біля потрібного поля ще раз.';
+    window.KomunalMeterPhoto.open({ title: spec[1] + ' з фото', target: 'Поточний показник · ' + monthLabel(period), unit: spec[2],
+      apply(value) {
+        if (!validContext()) return { ok: false, error: changed };
+        const parsed = parseNumber(value), previous = parseNumber(draft()[spec[3]]);
+        if (parsed.error) return { ok: false, error: 'Число не схоже на коректний показник. Спробуйте інше фото.' };
+        if (previous.value !== null && !previous.error && parsed.value < previous.value) return { ok: false, error: 'Розпізнане число менше за попередній показник. Перевірте, що рамка охоплює всі цифри.' };
+        set(value); return { ok: true };
+      }, undo() { if (!validContext()) return { ok: false, error: changed }; set(original); return { ok: true }; }
+    });
   }
   function readingPair(prefix, examples) { return `<div class="readings">${field(`${prefix}Prev`, 'Попередній показник', examples[0])}${field(`${prefix}Current`, 'Поточний показник', examples[1])}</div>`; }
   function tariffText(id) {
@@ -353,6 +373,7 @@
     for (const line of calc.lines) {
       const card = $(`#card-${line.id}`); card.classList.toggle('excluded', line.excluded);
       card.querySelectorAll('[data-field]').forEach(el => { el.disabled = line.excluded; });
+      card.querySelectorAll('[data-meter-photo]').forEach(el => { el.disabled = line.excluded; });
       $(`#amount-${line.id}`).textContent = line.excluded || line.amount === null ? '—' : money(line.amount);
       $(`#quantity-${line.id}`).textContent = line.excluded ? 'Не враховано' : line.quantity === null ? 'Додайте показники' : `${number(line.quantity)} ${line.unit}${line.id === 'delivery' ? ' / міс.' : ''}`;
       $(`#service-error-${line.id}`).textContent = line.excluded ? '' : calc.errors[`amount-${line.id}`] || calc.errors[`rate-${line.id === 'electricity' ? 'electricityDay' : line.id}`] || calc.errors[`rate-${line.id === 'electricity' ? 'electricityNight' : line.id}`] || '';
@@ -637,6 +658,7 @@
       return; // Native anchor opens only the constant official URL, without account data.
     }
     const button = e.target.closest('button'); if (!button) return;
+    if (button.dataset.meterPhoto) { openMeterPhoto(button.dataset.meterPhoto); return; }
     if (button.dataset.transferService && Object.hasOwn(TRANSFER_SERVICES, button.dataset.transferService)) { profile().transferService = button.dataset.transferService; persist(); switchView('transfer', { focus: true }); return; }
     if (button.dataset.transferRecord) { showTransferRecord(button.dataset.transferRecord); return; }
     if (button.dataset.transferCopy) { copyTransferValue(button.dataset.recordId, button.dataset.transferCopy); return; }
