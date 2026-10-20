@@ -32,3 +32,6 @@ public/view-mode.css
 
 public/email-account.js
 public/email-account.css
+
+public/motion.js
+public/motion.css

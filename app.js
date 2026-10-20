@@ -290,7 +290,9 @@
       if (!storageOK && !force) throw new Error('Збереження недоступне');
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); storageOK = true; storageError = '';
     } catch (error) { storageOK = false; storageError ||= 'Браузер не зберігає дані: сховище недоступне або заповнене. Зміни залишаться лише до закриття вкладки. Експортуйте резервну копію.'; }
-    updateStorageStatus(); return storageOK;
+    updateStorageStatus();
+    window.dispatchEvent(new CustomEvent('komunal-saved', { detail: { ok: storageOK } }));
+    return storageOK;
   }
   function updateStorageStatus() {
     const warning = $('#storage-warning'); warning.hidden = storageOK; warning.textContent = storageError;
@@ -334,7 +336,9 @@
   }
   function updateCalculation() {
     const calc = result();
-    $('#total-value').textContent = money(calc.total);
+    const total = $('#total-value'), formattedTotal = money(calc.total), totalChanged = total.textContent !== formattedTotal;
+    total.textContent = formattedTotal;
+    if (totalChanged) window.dispatchEvent(new Event('komunal-total-change'));
     $('#complete-count').textContent = `${calc.ready} з ${calc.enabled}`;
     $('#summary-period').textContent = monthLabel(state.period);
     $('#calculation-status').textContent = calc.complete ? 'Усе готово. Збережіть цей місяць для вашого обліку.' : calc.enabled === 0 ? 'Увімкніть хоча б одну послугу.' : `Заповніть показники й тарифи: готово ${calc.ready} із ${calc.enabled} послуг. Підсумок поки частковий.`;
@@ -504,7 +508,8 @@
     if (view === 'dashboard') renderDashboard(); if (view === 'tariffs') renderTariffs(); if (view === 'history') renderHistory(); if (view === 'profiles') renderProfiles();
     if (view === 'transfer') renderTransfer();
     history.replaceState(null, '', `#${view}`);
-    if (focus) { $('#main').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }
+    if (focus) { $('#main').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: document.documentElement.dataset.motion === 'full' ? 'smooth' : 'instant' }); }
+    window.dispatchEvent(new CustomEvent('komunal-view-change', { detail: { view } }));
   }
   function saveCalculation() {
     const calc = result();

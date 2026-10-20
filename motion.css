@@ -1,0 +1,69 @@
+/* Quiet, finite motion. No continuously moving decoration or hidden content. */
+:root{--ease-soft:cubic-bezier(.22,1,.36,1)}
+.welcome-card{background:linear-gradient(115deg,#edf2ff 5%,#f1f3ff 62%,#f7f9ff)}
+.service-card{box-shadow:0 3px 16px #24396b05}
+.service-card:focus-within{border-color:#a8bbf1;box-shadow:0 0 0 3px #315be80a,0 8px 28px #24396b07}
+.total-amount,.card-result strong{font-variant-numeric:tabular-nums}
+.saved-status{padding:5px 9px;border-radius:8px}
+.saved-status[data-saved=true]{color:#35765f;background:#eaf6ee}
+.toast{background:#233553f2;border:1px solid #ffffff24;backdrop-filter:blur(12px)}
+.motion-preference{margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+.motion-option{display:flex;align-items:flex-start;gap:13px;cursor:pointer;color:var(--text);font-size:18px;line-height:1.5;font-weight:700}
+.motion-option input{width:24px;height:24px;min-width:24px;min-height:24px;margin:2px 0 0;accent-color:var(--primary);cursor:pointer}
+.motion-option:has(input:disabled){cursor:default}
+.motion-option input:disabled{cursor:default}
+.motion-preference p{font-size:15px;line-height:1.7;color:var(--muted);margin:8px 0 0 37px}
+body[data-theme=dark] .saved-status[data-saved=true]{background:#233f35;color:#a4d1ba}
+body[data-theme=dark] .service-card:focus-within{border-color:#7c98d9;box-shadow:0 0 0 3px #86a4ff13}
+
+@media screen and (prefers-reduced-motion:no-preference){
+  :root[data-motion=full] :is(body,.sidebar,.topbar,.welcome-card,.service-card,.panel,.breakdown-card,.eco-card,.premium-teaser){
+    transition:background-color .3s ease,color .25s ease,border-color .25s ease,box-shadow .3s var(--ease-soft),translate .3s var(--ease-soft);
+  }
+  :root[data-motion=full] :is(button,a,input,select,textarea){
+    transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .25s var(--ease-soft),translate .25s var(--ease-soft),filter .22s ease;
+  }
+  :root[data-motion=full] .nav-item svg{transition:translate .25s var(--ease-soft),color .2s ease}
+  :root[data-motion=full] button:active:not(:disabled){transform:none;translate:0 1px}
+  :root[data-motion=full] .saved-status{transition:color .25s ease,background-color .25s ease}
+  :root[data-motion=full] .toast{transition:transform .35s var(--ease-soft),opacity .25s ease}
+  :root[data-motion=quiet] .saved-status{transition:color .12s ease,background-color .12s ease}
+  :root[data-motion=quiet] .toast{transform:translate(-50%,0);transition:opacity .14s ease}
+
+  :root[data-motion=full] :is(.modal,.email-auth-modal,.view-mode-modal)[open]{animation:komunal-dialog-in .28s var(--ease-soft)}
+  :root[data-motion=quiet] :is(.modal,.email-auth-modal,.view-mode-modal)[open]{animation:komunal-fade-in .14s ease}
+  :root:is([data-motion=full],[data-motion=quiet]) dialog[open]::backdrop{animation:komunal-fade-in .2s ease}
+
+  /* Native dialogs keep their focus/close semantics; CSS animates the top layer. */
+  @supports (transition-behavior:allow-discrete){
+    :root:is([data-motion=full],[data-motion=quiet]) :is(.modal,.email-auth-modal,.view-mode-modal){
+      opacity:0;translate:0 10px;scale:.985;
+      transition:opacity .2s ease,translate .28s var(--ease-soft),scale .28s var(--ease-soft),display .28s allow-discrete,overlay .28s allow-discrete;
+    }
+    :root[data-motion=quiet] :is(.modal,.email-auth-modal,.view-mode-modal){
+      translate:none;scale:none;
+      transition:opacity .14s ease,display .14s allow-discrete,overlay .14s allow-discrete;
+    }
+    :root:is([data-motion=full],[data-motion=quiet]) :is(.modal,.email-auth-modal,.view-mode-modal)[open]{opacity:1;translate:0 0;scale:1;animation:none}
+    :root:is([data-motion=full],[data-motion=quiet]) dialog::backdrop{
+      opacity:0;transition:opacity .2s ease,display .28s allow-discrete,overlay .28s allow-discrete;
+    }
+    :root:is([data-motion=full],[data-motion=quiet]) dialog[open]::backdrop{opacity:1;animation:none}
+    @starting-style{
+      :root[data-motion=full] :is(.modal,.email-auth-modal,.view-mode-modal)[open]{opacity:0;translate:0 10px;scale:.985}
+      :root[data-motion=quiet] :is(.modal,.email-auth-modal,.view-mode-modal)[open]{opacity:0}
+      :root:is([data-motion=full],[data-motion=quiet]) dialog[open]::backdrop{opacity:0}
+    }
+  }
+}
+@media screen and (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
+  :root[data-motion=full] .service-card:hover:not(:focus-within){translate:0 -3px;border-color:#cbd8f4;box-shadow:0 12px 32px #233a6410}
+  :root[data-motion=full] :is(.primary,.email-auth-primary,.view-mode-done):hover:not(:disabled){translate:0 -1px;box-shadow:0 6px 18px #315be828;filter:brightness(1.04)}
+  :root[data-motion=full] .nav-item:hover svg{translate:2px 0}
+  :root[data-motion=full] .text-button:hover>span:last-child{translate:2px 0;transition:translate .25s var(--ease-soft)}
+}
+@keyframes komunal-dialog-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes komunal-fade-in{from{opacity:0}to{opacity:1}}
+:root[data-motion=off] *,:root[data-motion=off] *::before,:root[data-motion=off] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media print{.motion-preference{display:none!important}}
