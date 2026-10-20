@@ -65,7 +65,10 @@ async function rateLimit(context, now) {
 }
 async function telegram(context, method, body) {
   try {
-    const response = await (context.fetcher || fetch)(`https://api.telegram.org/bot${context.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
+    // Workers' deployed runtime accepts manual/follow, not redirect:error.
+    // Never follow a redirect that could expose the bot token to another host.
+    const response = await (context.fetcher || fetch)(`https://api.telegram.org/bot${context.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
+    if (response.status >= 300 && response.status < 400) { const error = new Fault(502, 'Telegram тимчасово недоступний.'); error.telegramCode = response.status; throw error; }
     const data = await response.json();
     if (!data.ok) { const error = new Fault(502, 'Telegram тимчасово недоступний.'); error.telegramCode = data.error_code; error.retryAfter = data.parameters?.retry_after; throw error; }
     return data.result;

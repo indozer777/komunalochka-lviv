@@ -13,7 +13,7 @@ function setup() {
   const env = { TELEGRAM_BOT_TOKEN: 'unit-test-only', TELEGRAM_BOT_USERNAME: 'TestKomunal_bot', TELEGRAM_WEBHOOK_SECRET: 'w'.repeat(64), TELEGRAM_CRON_SECRET: 'c'.repeat(64), TELEGRAM_SCHEDULER_ENABLED: 'true', PREMIUM_ALLOWED_ORIGINS: 'https://app.test' };
   let now = NOW, update = 0, message = 0, transport;
   const calls = [];
-  const fetcher = async (url, options) => { const method = url.split('/').at(-1), body = JSON.parse(options.body); calls.push({ method, body }); if (transport) return transport(method, body); return Response.json({ ok: true, result: method === 'sendMessage' ? { message_id: ++message } : true }); };
+  const fetcher = async (url, options) => { assert.equal(options.redirect, 'manual'); const method = url.split('/').at(-1), body = JSON.parse(options.body); calls.push({ method, body }); if (transport) return transport(method, body); return Response.json({ ok: true, result: method === 'sendMessage' ? { message_id: ++message } : true }); };
   async function call(who, path, body, headers = {}) {
     const request = new Request('https://app.test/api/telegram' + path, { method: body === undefined ? 'GET' : 'POST', headers: { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-Komunalochka-Request': '1', ...headers }, ...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }) });
     const response = await handleTelegramRequest(request, { db, user: who, env, now: () => now, fetcher });
@@ -124,6 +124,11 @@ test('тестове повідомлення йде лише у власний 
   assert.equal(s.calls[0].body.chat_id, '123');
   assert.equal((await s.call(who, '/test', {})).status, 429);
   s.advance(MINUTE); assert.equal((await s.call(who, '/test', {})).status, 200);
+});
+test('переадресація Telegram не пересилає токен і завершується керованою помилкою', async () => {
+  const s = setup(), who = await s.bind(); s.calls.length = 0;
+  s.transport(() => new Response('', { status: 302, headers: { Location: 'https://untrusted.test' } }));
+  assert.equal((await s.call(who, '/test', {})).status, 502); assert.equal(s.calls.length, 1);
 });
 test('блокування бота й /stop зупиняють надсилання', async () => {
   const s = setup(), who = await s.bind(); await s.reminder(who); s.advance(60 * MINUTE);
