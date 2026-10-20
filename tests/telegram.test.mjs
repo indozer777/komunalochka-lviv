@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createHmac } from 'node:crypto';
 import { handleTelegramRequest, nextDue, kyivParts } from '../server/telegram.mjs';
 
 const NOW = Date.parse('2026-10-20T05:00:00Z'), MINUTE = 60000, DAY = 86400000;
@@ -21,7 +22,7 @@ function setup() {
   }
   const webhook = (body, headers = {}) => call(null, '/webhook', { update_id: ++update, ...body }, { 'X-Telegram-Bot-Api-Secret-Token': env.TELEGRAM_WEBHOOK_SECRET, ...headers });
   const start = (token, chat = 123) => webhook({ message: { chat: { type: 'private', id: chat }, from: { id: chat, first_name: 'Олена' }, text: '/start ' + token } });
-  const tick = () => call(null, '/tick', {}, { 'X-Komunalochka-Cron': env.TELEGRAM_CRON_SECRET });
+  const tick = () => { const stamp = String(Math.floor(now / 1000)); return call(null, '/tick', {}, { 'X-Komunalochka-Timestamp': stamp, 'X-Komunalochka-Cron': createHmac('sha256', env.TELEGRAM_CRON_SECRET).update('telegram-tick:' + stamp).digest('hex') }); };
   async function bind(who = user('one'), chat = 123) { const link = await call(who, '/link', {}); assert.equal(link.status, 200); await start(new URL(link.url).searchParams.get('start'), chat); const result = await call(who, '/confirm', {}); assert.equal(result.status, 200); return who; }
   async function reminder(who, data = {}) { const result = await call(who, '/reminders', { service: 'gas', kind: 'payment', day: 20, time: '09:00', ...data }); assert.equal(result.status, 201, JSON.stringify(result)); return result.reminders.at(-1); }
   const callback = (id, action, chat = 123, message_id = 1) => webhook({ callback_query: { id: 'callback-' + update, from: { id: chat }, data: action + ':' + id, message: { message_id, chat: { type: 'private', id: chat } } } });
@@ -47,6 +48,16 @@ test('анонімний статус не містить даних; зміни
   assert.equal((await s.webhook({}, { 'X-Telegram-Bot-Api-Secret-Token': 'incorrect' })).status, 403);
   assert.equal((await s.call(user('one'), '/link', '{bad')).status, 400);
   assert.equal((await s.call(user('one'), '/link', { data: 'x'.repeat(5000) })).status, 413);
+});
+test('cron приймає лише свіжий HMAC-підпис, а секрет не передається в заголовках', async () => {
+  const s = setup(), stamp = String(Math.floor(NOW / 1000));
+  const signature = createHmac('sha256', s.env.TELEGRAM_CRON_SECRET).update('telegram-tick:' + stamp).digest('hex');
+  assert.notEqual(signature, s.env.TELEGRAM_CRON_SECRET);
+  assert.equal((await s.call(null, '/tick', {}, { 'X-Komunalochka-Timestamp': stamp, 'X-Komunalochka-Cron': s.env.TELEGRAM_CRON_SECRET })).status, 403);
+  assert.equal((await s.tick()).status, 200);
+  s.advance(3 * MINUTE);
+  assert.equal((await s.call(null, '/tick', {}, { 'X-Komunalochka-Timestamp': stamp, 'X-Komunalochka-Cron': signature })).status, 403);
+  assert.equal((await s.tick()).status, 200);
 });
 test('одноразове посилання зберігається хешем, групи і чужий відправник не прив’язуються', async () => {
   const s = setup(), who = user('one'), link = await s.call(who, '/link', {}), token = new URL(link.url).searchParams.get('start');

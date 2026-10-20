@@ -14,6 +14,12 @@ async function secretEquals(a, b) {
   for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
   return diff === 0;
 }
+async function cronSignature(secret, timestamp) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode('telegram-tick:' + timestamp));
+  return [...new Uint8Array(signature)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
 export function kyivParts(timestamp) {
   return Object.fromEntries(fmt.formatToParts(new Date(timestamp)).filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]));
 }
@@ -204,7 +210,9 @@ export async function handleTelegramRequest(request, context) {
       }
     }
     if (path === '/tick' && request.method === 'POST') {
-      if (!await secretEquals(request.headers.get('X-Komunalochka-Cron'), env.TELEGRAM_CRON_SECRET)) fail(403, 'Недозволений запит.');
+      const timestamp = request.headers.get('X-Komunalochka-Timestamp') || '';
+      if (!/^\d{10,11}$/.test(timestamp) || Math.abs(Number(timestamp) * 1000 - now) > 120000 || typeof env.TELEGRAM_CRON_SECRET !== 'string' || env.TELEGRAM_CRON_SECRET.length < 32) fail(403, 'Недозволений запит.');
+      if (!await secretEquals(request.headers.get('X-Komunalochka-Cron'), await cronSignature(env.TELEGRAM_CRON_SECRET, timestamp))) fail(403, 'Недозволений запит.');
       if (!configured(env)) fail(503, 'Бот ще налаштовується.');
       return json(await deliverDue(context, now));
     }
