@@ -39,3 +39,5 @@ public/meter-photo.js
 public/meter-ocr-core.js
 public/meter-photo.css
 public/vendor/ocr/
+public/telegram.js
+public/telegram.css

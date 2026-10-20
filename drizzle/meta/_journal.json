@@ -8,6 +8,13 @@
       "when": 1792433330965,
       "tag": "0000_vengeful_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792533518949,
+      "tag": "0001_sparkling_xavin",
+      "breakpoints": true
     }
   ]
 }

@@ -13,11 +13,13 @@
   <link rel="stylesheet" href="email-account.css">
   <link rel="stylesheet" href="motion.css">
   <link rel="stylesheet" href="meter-photo.css">
+  <link rel="stylesheet" href="telegram.css">
   <script src="email-account.js" defer></script>
   <script src="premium.js" defer></script>
   <script src="motion.js" defer></script>
   <script src="meter-ocr-core.js" defer></script>
   <script src="meter-photo.js" defer></script>
+  <script src="telegram.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -32,6 +34,7 @@
         <button class="nav-item" data-view="history"><span data-icon="chart"></span>Історія витрат<span class="tiny-lock" data-icon="lock"></span></button>
         <button class="nav-item" data-view="tariffs"><span data-icon="sliders"></span>Тарифи</button>
         <button class="nav-item" data-view="profiles"><span data-icon="home"></span>Мої помешкання<span class="tiny-lock" data-icon="lock"></span></button>
+        <button class="nav-item" data-view="reminders"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 20h4"/></svg>Нагадування</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="premium-teaser"><span class="premium-spark" data-icon="spark"></span><h3>Більше спокою.<br>Більше можливостей.</h3><p>Історія, кілька помешкань<br>та квитанції з Premium.</p><button class="button premium-button" data-action="premium">Відкрити Premium <span>↗</span></button></div>
@@ -65,6 +68,7 @@
         <section id="view-transfer" class="view" hidden></section>
         <section id="view-history" class="view" hidden></section>
         <section id="view-profiles" class="view" hidden></section>
+        <section id="view-reminders" class="view" hidden></section>
         <footer class="main-footer"><span>© <span id="copyright-year">2026</span> КомуналОчка</span><span>Трохи простіше. Трохи спокійніше. <span class="blue-heart">♡</span></span><button class="text-button muted" data-action="help">Про застосунок</button></footer>
       </main>
     </div>

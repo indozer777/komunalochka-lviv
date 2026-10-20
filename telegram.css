@@ -1,0 +1,20 @@
+#view-reminders{--muted:#53627a}body[data-theme=dark] #view-reminders{--muted:#bac9df}
+#view-reminders .panel p{font-size:16px;line-height:1.75}#view-reminders h2{font-size:23px;line-height:1.5;margin-bottom:12px}
+#view-reminders .button{font-size:16px;min-height:48px;white-space:normal}
+.telegram-intro{max-width:740px}.telegram-intro>p{margin:12px 0 20px}.telegram-symbol{display:grid;place-items:center;width:56px;height:56px;background:var(--soft-blue);color:var(--primary);border-radius:17px;font-size:32px;margin-bottom:18px}
+.telegram-steps{padding-left:24px;margin:20px 0;font-size:17px;line-height:1.9}.telegram-intro>.text-button{display:block;margin-top:20px;font-size:14px}
+.telegram-pending{border:1px solid var(--line);border-radius:12px;background:var(--soft-blue);padding:20px}.telegram-pending p{margin:8px 0 16px}
+.telegram-connected{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}.telegram-connected-label{display:block;font-size:14px;color:var(--primary);font-weight:750;margin-bottom:6px}.telegram-connected h2{margin-bottom:3px!important;overflow-wrap:anywhere}
+.telegram-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:20px;align-items:start}.telegram-layout>*{min-width:0}
+.telegram-form{display:grid;gap:18px;margin-top:18px}.telegram-form label{font-size:16px;color:var(--text);margin-bottom:8px}.telegram-form :is(input,select){font-size:17px;min-height:52px}
+.telegram-date-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-width:0}.telegram-date-fields>div{min-width:0}
+#view-reminders .telegram-note{font-size:14px;color:var(--muted);line-height:1.8;margin:14px 0}.telegram-list{display:grid;gap:14px;margin-top:18px}
+.telegram-reminder{border:1px solid var(--line);border-radius:12px;padding:18px}.telegram-reminder.paused{background:var(--bg)}.telegram-reminder-heading{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}.telegram-reminder h3{font-size:18px;line-height:1.5}.telegram-reminder-heading>span{font-size:12px;color:var(--muted);padding:3px 7px;border:1px solid var(--line);border-radius:6px}
+.telegram-reminder p{margin-top:8px}.telegram-reminder .telegram-next{font-size:14px!important}.telegram-reminder-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}.telegram-reminder-actions .text-button{font-size:14px;padding:10px}
+.telegram-feedback{font-size:17px;line-height:1.7;color:var(--text);margin:16px 0;overflow-wrap:anywhere}
+html[data-view-mode=comfortable] #view-reminders :is(.button,label,input,select,.telegram-steps,.telegram-feedback){font-size:18px;min-height:54px}
+html[data-view-mode=comfortable] #view-reminders .panel p{font-size:18px}
+html[data-view-mode=comfortable] #view-reminders .telegram-note,html[data-view-mode=comfortable] #view-reminders .telegram-next{font-size:16px!important}
+@media(min-width:1001px){html[data-view-mode=comfortable] #navigation{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1000px){.telegram-layout{grid-template-columns:1fr}}
+@media(max-width:460px){.telegram-date-fields{grid-template-columns:1fr}.telegram-connected>.button{width:100%}.telegram-reminder{padding:16px}.telegram-reminder-actions .button{flex:1}#view-reminders .panel{padding:22px 18px}}

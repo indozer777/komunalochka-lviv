@@ -14,14 +14,15 @@
     "db:generate": "drizzle-kit generate",
     "predev": "node scripts/prepare-assets.mjs",
     "prebuild": "node scripts/prepare-assets.mjs",
-    "test": "node --test tests/core.test.cjs tests/premium.test.mjs tests/email-auth.test.mjs",
+    "test": "node --test tests/core.test.cjs tests/premium.test.mjs tests/email-auth.test.mjs tests/telegram.test.mjs",
     "test:browser": "node tests/browser.cjs",
     "test:transfer": "node tests/transfer.cjs",
     "test:networks": "node tests/networks.cjs",
     "test:premium": "node tests/premium-browser.cjs",
     "test:view": "node tests/view-mode.cjs",
     "test:photo": "node --test tests/meter-ocr.test.cjs && node tests/meter-photo.cjs",
-    "test:email": "node tests/email-browser.cjs"
+    "test:email": "node tests/email-browser.cjs",
+    "test:telegram": "node tests/telegram-browser.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

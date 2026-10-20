@@ -7,5 +7,10 @@ declare namespace Cloudflare {
     EMAIL_LOGIN_ENABLED?: string;
     SUPABASE_URL?: string;
     SUPABASE_PUBLISHABLE_KEY?: string;
+    TELEGRAM_BOT_TOKEN?: string;
+    TELEGRAM_BOT_USERNAME?: string;
+    TELEGRAM_WEBHOOK_SECRET?: string;
+    TELEGRAM_CRON_SECRET?: string;
+    TELEGRAM_SCHEDULER_ENABLED?: string;
   }
 }

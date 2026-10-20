@@ -522,7 +522,7 @@
     $('#view-profiles').innerHTML = `${pageHeading('Мої помешкання', 'Кожен дім має свої показники, тарифи та історію.')}<div class="panel"><div class="panel-heading"><h2>Ваші адреси <span class="count">${state.profiles.length}/5</span></h2><button class="button primary" data-action="add-profile">${icon('plus')}Додати помешкання</button></div><div class="profile-list">${state.profiles.map(p => `<article class="profile-card ${p.id === state.activeId ? 'selected' : ''}"><span class="small-icon">${icon('home')}</span><h3>${escapeHTML(p.name)}</h3><p>Львів${p.address ? ' · ' + escapeHTML(p.address) : ''}</p><small class="tariff-stamp">${p.history.length} збережених місяців</small><div class="profile-actions">${p.id !== state.activeId ? `<button class="text-button" data-profile-select="${p.id}">Обрати</button>` : '<span class="text-button">Поточне помешкання</span>'}<button class="text-button muted" data-profile-edit="${p.id}">Змінити</button>${state.profiles.length > 1 ? `<button class="text-button muted" data-profile-delete="${p.id}">Видалити</button>` : ''}</div></article>`).join('')}</div></div><div class="panel"><div class="panel-heading"><h2>Резервні копії</h2><span class="pill">PREMIUM</span></div><p>Локальні дані прив’язані до браузера та адреси сайту. Збережіть JSON-копію для перенесення на інший пристрій. Копія містить адреси й показники: зберігайте її у себе.</p><div class="settings-actions"><button class="button secondary" data-action="export">${icon('download')}Завантажити JSON</button><button class="button secondary" data-action="import">Відновити з копії</button></div></div>`;
   }
   function switchView(view, { focus = false } = {}) {
-    if (!['dashboard', 'tariffs', 'history', 'profiles', 'transfer'].includes(view)) return;
+    if (!['dashboard', 'tariffs', 'history', 'profiles', 'transfer', 'reminders'].includes(view)) return;
     if (['history', 'profiles'].includes(view) && !premium()) { requirePremium(() => {}); return; }
     currentView = view; document.querySelectorAll('.view').forEach(el => { el.hidden = el.id !== `view-${view}`; });
     document.querySelectorAll('.nav-item').forEach(el => { const active = el.dataset.view === view; el.classList.toggle('active', active); if (active) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
@@ -703,7 +703,7 @@
   window.addEventListener('hashchange', () => switchView(location.hash.slice(1)));
   hydrateIcons(); applyTheme(); renderDashboard();
   $('#copyright-year').textContent = new Date().getFullYear();
-  const initialView = ['dashboard', 'tariffs', 'history', 'profiles', 'transfer'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
+  const initialView = ['dashboard', 'tariffs', 'history', 'profiles', 'transfer', 'reminders'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
   if (['history', 'profiles'].includes(initialView) && !window.KomunalPremium?.getState().ready) window.KomunalPremium.refresh().then(() => switchView(initialView));
   else switchView(initialView);
   // An immediate write probes actual quota/access instead of displaying false "saved" status.
