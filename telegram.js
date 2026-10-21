@@ -2,7 +2,7 @@
   'use strict';
   const root = () => document.getElementById('view-reminders');
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const services = { gas: 'Газ', water: 'Вода', electricity: 'Електроенергія', delivery: 'Доставка газу', trash: 'Вивіз сміття' };
+  const services = { gas: 'Газ', water: 'Вода', electricity: 'Електроенергія', delivery: 'Доставка газу', trash: 'Вивіз сміття', housing: 'Квартплата' };
   const date = value => new Date(value).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   let state, generation = 0, busy = false, link, timer, signature = '', draft = { service: 'gas', kind: 'payment', day: '20', time: '09:00' };
   const visible = () => root() && !root().hidden;

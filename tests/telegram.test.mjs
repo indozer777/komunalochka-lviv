@@ -141,6 +141,13 @@ test('переадресація Telegram не пересилає токен і 
   s.transport(() => new Response('', { status: 302, headers: { Location: 'https://untrusted.test' } }));
   assert.equal((await s.call(who, '/test', {})).status, 502); assert.equal(s.calls.length, 1);
 });
+test('квартплата підтримує оплату та правильний текст бота, без показників лічильника', async () => {
+  const s = setup(), who = await s.bind();
+  assert.equal((await s.call(who, '/reminders', { service: 'housing', kind: 'readings', day: 20, time: '09:00' })).status, 400);
+  await s.reminder(who, { service: 'housing' }); s.calls.length = 0; s.advance(60 * MINUTE);
+  assert.equal((await s.tick()).sent, 1); assert.match(s.calls[0].body.text, /Квартплата/);
+  assert.equal(s.calls[0].body.reply_markup.inline_keyboard[1][0].text, 'Я оплатив');
+});
 test('блокування бота й /stop зупиняють надсилання', async () => {
   const s = setup(), who = await s.bind(); await s.reminder(who); s.advance(60 * MINUTE);
   s.transport(() => Response.json({ ok: false, error_code: 403 })); await s.tick(); assert.equal((await s.call(who, '/status')).binding, null);

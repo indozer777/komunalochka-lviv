@@ -10,7 +10,8 @@
     { id: 'water', name: 'Вода та водовідведення', provider: 'ЛМКП «Львівводоканал»', icon: 'drop', unit: 'м³' },
     { id: 'electricity', name: 'Електроенергія', provider: 'Побутове споживання · Львів', icon: 'bolt', unit: 'кВт·год' },
     { id: 'delivery', name: 'Доставка газу', provider: 'Львівська філія «Газмережі»', icon: 'pipe', unit: 'м³ потужності' },
-    { id: 'trash', name: 'Вивіз сміття', provider: 'Ваш перевізник', icon: 'leaf', unit: 'осіб' }
+    { id: 'trash', name: 'Вивіз сміття', provider: 'Ваш перевізник', icon: 'leaf', unit: 'осіб' },
+    { id: 'housing', name: 'Квартплата', provider: 'ОСББ або управитель вашого будинку', icon: 'home', unit: 'м²' }
   ];
   const SOURCES = Object.freeze({
     gas: 'https://gas.ua/uk/home/tariffs/tariffdetails?id=21',
@@ -111,10 +112,12 @@
     return normalized;
   }
   function normalizeGasTransfer(raw) { return normalizeTransfer(raw, 'gas'); }
-  const FIELD_KEYS = ['gasPrev', 'gasCurrent', 'waterPrev', 'waterCurrent', 'dayPrev', 'dayCurrent', 'nightPrev', 'nightCurrent', 'deliveryAnnual', 'residents'];
+  const HOUSING_FIELDS = ['housingArea', 'housingRate', 'housingFixed'];
+  const FIELD_KEYS = ['gasPrev', 'gasCurrent', 'waterPrev', 'waterCurrent', 'dayPrev', 'dayCurrent', 'nightPrev', 'nightCurrent', 'deliveryAnnual', 'residents', ...HOUSING_FIELDS];
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const money = value => new Intl.NumberFormat('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
   const number = value => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 3 }).format(value);
+  const preciseNumber = value => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 6 }).format(value);
   const roundMoney = value => Math.round((value + Number.EPSILON) * 100) / 100;
   function parseNumber(raw, { integer = false } = {}) {
     const value = String(raw ?? '').trim();
@@ -133,7 +136,7 @@
   function validPeriod(value) { return typeof value === 'string' && /^(20\d{2}|2100)-(0[1-9]|1[0-2])$/.test(value) && value >= '2020-01' && value <= '2100-12'; }
   function monthLabel(value) { return new Intl.DateTimeFormat('uk-UA', { month: 'long', year: 'numeric', timeZone: 'Europe/Kyiv' }).format(new Date(`${value}-15T12:00:00Z`)); }
   function makeDraft() {
-    return { ...Object.fromEntries(FIELD_KEYS.map(key => [key, ''])), zone: 'single', includes: Object.fromEntries(SERVICES.map(s => [s.id, true])) };
+    return { ...Object.fromEntries(FIELD_KEYS.map(key => [key, ''])), zone: 'single', housingMode: 'area', includes: Object.fromEntries(SERVICES.map(s => [s.id, s.id !== 'housing'])) };
   }
   const uid = () => globalThis.crypto?.randomUUID?.() || `home-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   function makeProfile(name = 'Моя оселя', address = '') { return { id: uid(), name, address, manual: false, rates: { ...REFERENCE_RATES }, drafts: {}, history: [], transferService: 'gas', gasTransfer: makeGasTransfer(), waterTransfer: makeTransfer('water'), electricityTransfer: makeTransfer('electricity') }; }
@@ -150,7 +153,7 @@
       return Math.round((current - previous) * 1000000) / 1000000;
     };
     const lines = SERVICES.map(service => {
-      const line = { id: service.id, name: service.name, unit: service.unit, excluded: draft.includes?.[service.id] === false, amount: null, quantity: null, detail: '' };
+      const line = { id: service.id, name: service.name, unit: service.unit, excluded: service.id === 'housing' ? draft.includes?.housing !== true : draft.includes?.[service.id] === false, amount: null, quantity: null, detail: '' };
       if (line.excluded) return line;
       if (service.id === 'gas' || service.id === 'water') {
         const quantity = consumed(`${service.id}Prev`, `${service.id}Current`), price = rate(service.id);
@@ -167,6 +170,14 @@
       } else if (service.id === 'delivery') {
         const annual = read('deliveryAnnual'), price = rate('delivery');
         if (annual !== null && price !== null) { line.quantity = annual / 12; line.amount = roundMoney(annual / 12 * price); line.detail = `${number(annual)} м³/рік ÷ 12 × ${number(price)} грн`; }
+      } else if (service.id === 'housing') {
+        if (draft.housingMode === 'fixed') {
+          const amount = read('housingFixed');
+          if (amount !== null) { line.quantity = 1; line.unit = 'міс.'; line.amount = roundMoney(amount); line.detail = `Фіксована сума за місяць: ${money(amount)} грн`; }
+        } else if (draft.housingMode === 'area') {
+          const area = read('housingArea'), price = read('housingRate');
+          if (area !== null && price !== null) { line.quantity = area; line.amount = roundMoney(area * price); line.detail = `${preciseNumber(area)} м² × ${preciseNumber(price)} грн/м²`; }
+        } else errors.housingMode = 'Оберіть спосіб розрахунку квартплати';
       } else {
         const residents = read('residents', { integer: true }), price = rate('trash');
         if (residents !== null && price !== null) { line.quantity = residents; line.amount = roundMoney(residents * price); line.detail = `${number(residents)} осіб × ${number(price)} грн/особу`; }
@@ -183,8 +194,10 @@
   function sanitizeDraft(raw) {
     if (!raw || typeof raw !== 'object' || !['single', 'dual'].includes(raw.zone)) throw new Error('Некоректні показники');
     const draft = makeDraft(); draft.zone = raw.zone;
-    for (const key of FIELD_KEYS) { if (typeof raw[key] !== 'string' || raw[key].length > 24) throw new Error('Некоректне поле показників'); draft[key] = raw[key]; }
-    for (const s of SERVICES) { if (typeof raw.includes?.[s.id] !== 'boolean') throw new Error('Некоректний перелік послуг'); draft.includes[s.id] = raw.includes[s.id]; }
+    const mode = raw.housingMode === undefined ? 'area' : raw.housingMode;
+    if (!['area', 'fixed'].includes(mode)) throw new Error('Некоректний спосіб розрахунку квартплати'); draft.housingMode = mode;
+    for (const key of FIELD_KEYS) { const value = raw[key] === undefined && HOUSING_FIELDS.includes(key) ? '' : raw[key]; if (typeof value !== 'string' || value.length > 24) throw new Error('Некоректне поле показників'); draft[key] = value; }
+    for (const s of SERVICES) { const included = s.id === 'housing' && raw.includes?.housing === undefined ? false : raw.includes?.[s.id]; if (typeof included !== 'boolean') throw new Error('Некоректний перелік послуг'); draft.includes[s.id] = included; }
     return draft;
   }
   function sanitizeRates(raw) {
@@ -336,6 +349,11 @@
   }
   function readingPair(prefix, examples) { return `<div class="readings">${field(`${prefix}Prev`, 'Попередній показник', examples[0])}${field(`${prefix}Current`, 'Поточний показник', examples[1])}</div>`; }
   function tariffText(id) {
+    if (id === 'housing') {
+      if (draft().housingMode === 'fixed') return 'Фіксована сума за місяць';
+      const parsed = parseNumber(draft().housingRate);
+      return parsed.error ? 'Вкажіть тариф за м² нижче' : `${preciseNumber(parsed.value)} грн / м²`;
+    }
     const r = rates(); const key = id === 'electricity' ? 'electricityDay' : id;
     if (r[key] === '') return 'Вкажіть тариф перевізника';
     const price = number(parseNumber(r[key]).value);
@@ -349,6 +367,7 @@
       if (s.id === 'electricity') fields = `<div class="electricity-readings"><div>${d.zone === 'dual' ? `<div class="zone-label">${icon('sun')}День · ${escapeHTML(rates().electricityDay)} грн/кВт·год</div>` : ''}${readingPair('day', ['4 800', '4 960'])}</div>${d.zone === 'dual' ? `<div><div class="zone-label">${icon('moon')}Ніч · ${escapeHTML(rates().electricityNight)} грн/кВт·год</div>${readingPair('night', ['1 200', '1 270'])}</div>` : `<div class="field-help">Однозонний лічильник: одна ставка протягом доби.<br>Маєте двозонний? Перемкніть на «День / ніч».</div>`}</div>`;
       if (s.id === 'delivery') fields = `${field('deliveryAnnual', 'Річна замовлена потужність, м³', 'Наприклад, 240')}<div class="field-help">Річна потужність ÷ 12 × тариф. Візьміть потужність із рахунку «Газмережі».</div>`;
       if (s.id === 'trash') fields = `${field('residents', 'Зареєстровано мешканців', 'Наприклад, 2')}<div class="field-help">Тариф за особу встановлює ваш перевізник. Вкажіть його у розділі «Тарифи».</div>`;
+      if (s.id === 'housing') fields = `<div class="field housing-mode-field"><label for="housing-mode">Як рахувати квартплату</label><select id="housing-mode" aria-describedby="housing-help"><option value="area" ${d.housingMode === 'area' ? 'selected' : ''}>За площею квартири</option><option value="fixed" ${d.housingMode === 'fixed' ? 'selected' : ''}>Готова сума з платіжки</option></select></div>${d.housingMode === 'fixed' ? field('housingFixed', 'Квартплата за місяць, грн', 'Наприклад, 520') : `<div class="readings">${field('housingArea', 'Площа квартири, м²', 'Наприклад, 52,4')}${field('housingRate', 'Тариф за м² на місяць, грн', 'Наприклад, 9,35')}</div>`}<div id="housing-help" class="field-help">${d.includes.housing ? 'Візьміть площу й тариф із рахунку ОСББ або управителя. Якщо маєте готову суму, оберіть другий спосіб. Значення зберігаються для цього місяця й помешкання.' : 'Поставте галочку вгорі картки, щоб додати квартплату до загальної суми.'}</div>`;
       const header = `<div class="service-head"><span class="service-icon">${icon(s.icon)}</span><div><h3>${s.name}</h3><div class="service-provider">${s.provider}</div></div><label class="service-toggle"><span class="sr-only">Врахувати: ${s.name}</span><input type="checkbox" data-include="${s.id}" ${d.includes[s.id] ? 'checked' : ''}></label></div>`;
       return `<article class="service-card ${s.id}${d.includes[s.id] ? '' : ' excluded'}" id="card-${s.id}">${s.id === 'electricity' ? `<div class="electricity-header">${header}<div class="zone-switch" aria-label="Тип електролічильника"><button data-zone="single" aria-pressed="${d.zone === 'single'}">Одна зона</button><button data-zone="dual" aria-pressed="${d.zone === 'dual'}">День / ніч</button></div></div>` : header}<div class="tariff-line">Тариф: <strong>${tariffText(s.id)}</strong><span class="rate-status" title="${profile().manual ? 'Власний тариф' : 'Довідкова ставка: звірте з рахунком'}"></span></div><div class="service-fields">${fields}</div><div class="card-result"><span class="consumption" id="quantity-${s.id}">Додайте показники</span><strong><span id="amount-${s.id}">—</span><small>грн</small></strong></div><div class="field-error" id="service-error-${s.id}" aria-live="polite"></div>${Object.hasOwn(TRANSFER_SERVICES, s.id) ? `<button class="text-button service-transfer-link" data-transfer-service="${s.id}">${icon('send')}Передати показники <span>↗</span></button>` : ''}</article>`;
     }).join('');
@@ -356,6 +375,7 @@
   }
   function updateCalculation() {
     const calc = result();
+    $('#card-housing .tariff-line strong').textContent = tariffText('housing');
     const total = $('#total-value'), formattedTotal = money(calc.total), totalChanged = total.textContent !== formattedTotal;
     total.textContent = formattedTotal;
     if (totalChanged) window.dispatchEvent(new Event('komunal-total-change'));
@@ -372,14 +392,15 @@
     }
     for (const line of calc.lines) {
       const card = $(`#card-${line.id}`); card.classList.toggle('excluded', line.excluded);
-      card.querySelectorAll('[data-field]').forEach(el => { el.disabled = line.excluded; });
+      card.querySelectorAll('[data-field],#housing-mode').forEach(el => { el.disabled = line.excluded; });
       card.querySelectorAll('[data-meter-photo]').forEach(el => { el.disabled = line.excluded; });
       $(`#amount-${line.id}`).textContent = line.excluded || line.amount === null ? '—' : money(line.amount);
-      $(`#quantity-${line.id}`).textContent = line.excluded ? 'Не враховано' : line.quantity === null ? 'Додайте показники' : `${number(line.quantity)} ${line.unit}${line.id === 'delivery' ? ' / міс.' : ''}`;
+      $(`#quantity-${line.id}`).textContent = line.excluded ? 'Не враховано' : line.id === 'housing' ? (line.amount === null ? (draft().housingMode === 'fixed' ? 'Вкажіть суму з платіжки' : 'Вкажіть площу й тариф') : line.detail) : line.quantity === null ? 'Додайте показники' : `${number(line.quantity)} ${line.unit}${line.id === 'delivery' ? ' / міс.' : ''}`;
       $(`#service-error-${line.id}`).textContent = line.excluded ? '' : calc.errors[`amount-${line.id}`] || calc.errors[`rate-${line.id === 'electricity' ? 'electricityDay' : line.id}`] || calc.errors[`rate-${line.id === 'electricity' ? 'electricityNight' : line.id}`] || '';
     }
   }
   function renderDashboard() {
+    $('#service-count').textContent = SERVICES.length;
     $('#period').value = state.period;
     $('#period-display').textContent = monthLabel(state.period);
     $('#active-profile-name').textContent = profile().name;
@@ -395,6 +416,7 @@
     const p = profile();
     const labels = { gas: ['Газ', 'грн за м³', 'flame', 'gas'], delivery: ['Доставка газу', 'грн за м³ місячної потужності', 'pipe', 'delivery'], water: ['Вода та водовідведення', 'грн за м³ разом', 'drop', 'water'], electricityDay: ['Електроенергія · день / одна зона', 'грн за кВт·год', 'bolt', 'electricity'], electricityNight: ['Електроенергія · ніч', 'грн за кВт·год', 'moon', 'electricity'], trash: ['Вивіз сміття', 'грн за особу на місяць', 'leaf', 'trash'] };
     $('#view-tariffs').innerHTML = `${pageHeading('Тарифи для вашого дому', 'Ставки з ПДВ. Перевіряйте їх для свого постачальника та обраного місяця.')}<div class="notice warning">${icon('info')}<span>Базові ставки — довідкові, перевірені під час розробки 19.10.2026. Вода: 56,38 грн/м³ з 01.08.2026. Газ: 7,96 грн/м³ до 30.04.2027. Електроенергія 4,32 грн/кВт·год — базова ставка до 31.10.2026; ніч 2,16 грн/кВт·год. Пізніші періоди потребують перевірки. Для інших періодів введіть відповідні тарифи вручну.</span></div><div class="panel"><div class="panel-heading"><h2>Ваші тарифи · ${escapeHTML(p.name)}</h2><label class="switch"><input type="checkbox" id="manual-toggle" ${p.manual ? 'checked' : ''}><span>Власні тарифи</span></label></div><p>Увімкніть перемикач, щоб редагувати й зберігати ставки. Вимкнення повертає довідкові ставки, а ваші власні значення залишаються збереженими.</p><div class="tariff-grid" style="margin-top:22px">${RATE_KEYS.map(key => { const [name, unit, symbol, color] = labels[key]; return `<div class="rate-editor ${color}"><div class="rate-editor-head"><span class="service-icon">${icon(symbol)}</span><h3>${name}</h3></div><label for="rate-${key}">${unit}</label><input type="text" inputmode="decimal" maxlength="24" id="rate-${key}" data-rate="${key}" value="${escapeHTML(p.manual ? p.rates[key] : REFERENCE_RATES[key])}" ${p.manual ? '' : 'disabled'} placeholder="Введіть ставку" aria-describedby="rate-error-${key}"><div class="field-error" id="rate-error-${key}" aria-live="polite"></div>${SOURCES[key] ? `<a href="${SOURCES[key]}" target="_blank" rel="noopener noreferrer">Джерело постачальника ↗</a>` : '<small>Уточніть суму за особу у вашого перевізника.</small>'}<div class="source-status">${p.manual ? 'Власна ставка · зберігається автоматично' : 'Довідкова ставка · звірте період дії'}</div></div>`; }).join('')}</div><div class="settings-actions"><button class="button primary" data-action="refresh" ${fetchBusy ? 'disabled' : ''}>${icon('refresh')}${fetchBusy ? 'Перевіряємо джерела…' : 'Перевірити онлайн'}</button><span class="tariff-stamp">${state.lastFetch ? 'Остання спроба: ' + new Date(state.lastFetch).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' }) : 'Автоматична спроба при першому відкритті'}</span></div><div id="fetch-feedback"></div></div><div class="panel"><h2>Як працює перевірка?</h2><p style="margin-top:12px">Застосунок запитує офіційні сторінки Нафтогазу, Львівводоканалу та Львівобленерго. Якщо сайт забороняє запити з браузера (CORS), потребує JavaScript або має неоднозначні дані, ставка не змінюється. Знайдені ставки з’являться нижче для перевірки та застосування. Дату дії потрібно звірити на сторінці постачальника.</p><p style="margin-top:10px">Двохзонний облік: день 07:00–23:00, ніч 23:00–07:00. Нічна довідкова ставка — 50% денної. Для спеціальних тарифів, пільг та електроопалення потрібен окремий розрахунок постачальника.</p></div>`;
+    $('#view-tariffs').insertAdjacentHTML('beforeend', `<div class="panel housing-tariff-help"><h2>Квартплата · тариф вашого будинку</h2><p>Внесіть площу квартири й тариф за м² або готову суму з платіжки ОСББ чи управителя. Квартплата налаштовується окремо на головній; перемикач «Власні тарифи» на неї не впливає.</p><button class="button secondary" data-action="housing">Налаштувати квартплату</button></div>`);
     renderFetchFeedback();
   }
   function renderFetchFeedback() {
@@ -643,6 +665,8 @@
       state.period = el.value; draft(); persist(); renderDashboard(); renderTransfer();
     }
     if (el.dataset.include) { draft().includes[el.dataset.include] = el.checked; persist(); updateCalculation(); }
+    if (el.dataset.include === 'housing') { renderServices(); $('#card-housing [data-include]').focus({ preventScroll: true }); }
+    if (el.id === 'housing-mode' && ['area', 'fixed'].includes(el.value)) { draft().housingMode = el.value; persist(); renderServices(); $('#housing-mode').focus({ preventScroll: true }); }
     if (el.id === 'manual-toggle') { profile().manual = el.checked; persist(); renderTariffs(); renderDashboard(); }
     if (el.id === 'period') {
       if (!validPeriod(el.value)) { el.value = state.period; toast('Оберіть місяць від січня 2020 до грудня 2100.'); return; }
@@ -678,6 +702,7 @@
       premium: openPremium,
       theme: () => requirePremium(() => { state.theme = state.theme === 'light' ? 'dark' : 'light'; applyTheme(); persist(); }),
       profiles: () => switchView('profiles', { focus: true }),
+      housing: () => { switchView('dashboard'); $('#card-housing').scrollIntoView({ block: 'start', behavior: document.documentElement.dataset.motion === 'full' ? 'smooth' : 'instant' }); $('#card-housing [data-include]').focus({ preventScroll: true }); },
       'add-profile': () => requirePremium(() => profileForm()),
       demo, save: saveCalculation, print: () => requirePremium(() => printReceipt()), insights: () => requirePremium(showInsights), help,
       refresh: () => refreshRates(),

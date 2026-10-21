@@ -1,5 +1,5 @@
 const MINUTE = 60000, DAY = 86400000;
-const SERVICES = Object.freeze({ gas: 'Газ', water: 'Вода', electricity: 'Електроенергія', delivery: 'Доставка газу', trash: 'Вивіз сміття' });
+const SERVICES = Object.freeze({ gas: 'Газ', water: 'Вода', electricity: 'Електроенергія', delivery: 'Доставка газу', trash: 'Вивіз сміття', housing: 'Квартплата' });
 const SITE = 'https://komunalochka.com';
 const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 const q = (db, sql, args = []) => db.prepare(sql).bind(...args);

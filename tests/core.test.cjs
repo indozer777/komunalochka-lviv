@@ -7,13 +7,63 @@ function example() { return { ...core.makeDraft(), gasPrev: '1250', gasCurrent: 
 test('п’ять послуг: точний підсумок прикладу та двозонна електроенергія', () => {
   const result = core.calculate(example(), rates);
   assert.equal(result.complete, true);
-  assert.deepEqual(Object.fromEntries(result.lines.map(l => [l.id, l.amount])), { gas: 222.88, water: 394.66, electricity: 842.4, delivery: 40.56, trash: 90 });
+  assert.deepEqual(Object.fromEntries(result.lines.map(l => [l.id, l.amount])), { gas: 222.88, water: 394.66, electricity: 842.4, delivery: 40.56, trash: 90, housing: null });
+  assert.equal(result.lines.find(l => l.id === 'housing').excluded, true);
   assert.equal(result.total, 1590.5);
 });
 test('одна зона не потребує нічних показників і тарифу', () => {
   const d = example(); d.zone = 'single'; d.nightPrev = ''; d.nightCurrent = '';
   const r = core.calculate(d, { ...rates, electricityNight: '' });
   assert.equal(r.complete, true); assert.equal(r.lines.find(l => l.id === 'electricity').amount, 691.2);
+});
+
+function housingDraft(patch = {}) {
+  return { ...core.makeDraft(), includes: Object.fromEntries(core.SERVICES.map(s => [s.id, s.id === 'housing'])), ...patch };
+}
+test('квартплата за площею: десяткова кома, точна сума та загальний підсумок шести послуг', () => {
+  const d = housingDraft({ housingArea: '52,4', housingRate: '9,35' });
+  const r = core.calculate(d, core.REFERENCE_RATES), line = r.lines.find(l => l.id === 'housing');
+  assert.equal(r.complete, true); assert.equal(r.enabled, 1); assert.equal(r.total, 489.94);
+  assert.equal(line.quantity, 52.4); assert.match(line.detail, /52,4 м² × 9,35 грн\/м²/);
+  const all = example(); Object.assign(all, { housingArea: '52,4', housingRate: '9,35' }); all.includes.housing = true;
+  const total = core.calculate(all, rates); assert.equal(total.complete, true); assert.equal(total.enabled, 6); assert.equal(total.total, 2080.44);
+  const precise = core.calculate(housingDraft({ housingArea: '52,123456', housingRate: '2,001' }), {}).lines.find(l => l.id === 'housing');
+  assert.equal(precise.amount, 104.3); assert.match(precise.detail, /52,123456 м² × 2,001 грн\/м²/);
+});
+test('фіксована квартплата ігнорує поля іншого способу, допускає нуль та округлює копійки', () => {
+  const d = housingDraft({ housingMode: 'fixed', housingFixed: '520,125', housingArea: '-5', housingRate: 'bad' });
+  const r = core.calculate(d, {}); assert.equal(r.complete, true); assert.equal(r.total, 520.13); assert.deepEqual(r.errors, {});
+  const line = r.lines.find(l => l.id === 'housing'); assert.equal(line.unit, 'міс.'); assert.match(line.detail, /Фіксована сума/);
+  d.housingFixed = '0'; assert.equal(core.calculate(d, {}).total, 0); assert.equal(core.calculate(d, {}).complete, true);
+  d.housingMode = 'area'; assert.equal(core.calculate(d, {}).complete, false);
+});
+test('квартплата не приховує порожні, від’ємні та завеликі значення; вимкнення не блокує інші послуги', () => {
+  for (const patch of [{ housingArea: '' }, { housingRate: '' }, { housingArea: '-1' }, { housingRate: 'Infinity' }, { housingMode: 'fixed', housingFixed: '' }, { housingMode: 'unknown' }, { housingArea: '100000000', housingRate: '100000000' }]) {
+    const d = housingDraft({ housingArea: '50', housingRate: '10', ...patch }); const r = core.calculate(d, rates);
+    assert.equal(r.complete, false, JSON.stringify(patch)); assert.equal(r.lines.find(l => l.id === 'housing').amount, null);
+  }
+  const d = example(); d.includes.housing = false; d.housingRate = '-1'; assert.equal(core.calculate(d, rates).complete, true);
+  const legacy = example(); delete legacy.includes.housing; assert.equal(core.calculate(legacy, rates).total, 1590.5);
+});
+test('копії до появи квартплати зберігають чернетки, історію та підсумки без нових обов’язкових полів', () => {
+  const state = core.makeState(), p = state.profiles[0], oldDraft = example();
+  for (const key of ['housingArea','housingRate','housingFixed','housingMode']) delete oldDraft[key]; delete oldDraft.includes.housing;
+  p.drafts[state.period] = structuredClone(oldDraft); p.history.push({ period: state.period, savedAt: new Date().toISOString(), draft: structuredClone(oldDraft), rates });
+  const restored = core.normalizeState(state).profiles[0];
+  assert.equal(restored.drafts[state.period].gasCurrent, '1278'); assert.equal(restored.drafts[state.period].housingMode, 'area');
+  assert.equal(restored.drafts[state.period].includes.housing, false); assert.equal(restored.history[0].result.total, 1590.5); assert.equal(restored.history[0].result.complete, true);
+});
+test('квартплата зберігається окремо за місяцями й адресами, історія відтворює обидва способи', () => {
+  const state = core.makeState(), p = state.profiles[0];
+  p.drafts['2026-09'] = housingDraft({ housingArea: '52.4', housingRate: '9.35' });
+  p.drafts['2026-10'] = housingDraft({ housingMode: 'fixed', housingFixed: '600' });
+  p.history = Object.entries(p.drafts).map(([period, draft]) => ({ period, draft, rates, savedAt: new Date().toISOString() }));
+  const other = structuredClone(p); other.id = 'second-home'; other.drafts['2026-10'].housingFixed = '700'; state.profiles.push(other);
+  const restored = core.normalizeState(JSON.parse(JSON.stringify(state)));
+  assert.equal(restored.profiles[0].drafts['2026-10'].housingFixed, '600'); assert.equal(restored.profiles[1].drafts['2026-10'].housingFixed, '700');
+  assert.deepEqual(restored.profiles[0].history.map(h => h.result.total), [489.94, 600]);
+  const bad = structuredClone(state); bad.profiles[0].drafts['2026-10'].housingMode = 'other'; assert.throws(() => core.normalizeState(bad));
+  bad.profiles[0].drafts['2026-10'].housingMode = 'fixed'; bad.profiles[0].drafts['2026-10'].housingFixed = {}; assert.throws(() => core.normalizeState(bad));
 });
 test('десяткова кома, нуль, від’ємні та некоректні числа', () => {
   assert.equal(core.parseNumber('12,345').value, 12.345);
