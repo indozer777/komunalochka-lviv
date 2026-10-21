@@ -37,6 +37,8 @@ public/motion.js
 public/motion.css
 public/meter-photo.js
 public/meter-ocr-core.js
+public/meter-vision-core.js
+public/meter-vision-worker.js
 public/meter-photo.css
 public/vendor/ocr/
 public/telegram.js

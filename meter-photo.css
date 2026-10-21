@@ -15,6 +15,14 @@ body[data-theme=dark] .meter-photo-modal{--muted:#bac9df}
 .meter-photo-modal #photo-status{padding:14px 16px;background:var(--soft-blue);border:1px solid var(--line);border-radius:10px;color:var(--text);margin:18px 0 12px}
 #photo-result{display:block;font-size:32px;font-weight:800;color:var(--text);overflow-wrap:anywhere;padding:10px 0}
 .meter-photo-modal .photo-privacy{margin-top:18px;font-size:13px}
+.photo-red-option{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--soft-blue);color:var(--text);font-size:16px;line-height:1.6;cursor:pointer}
+.photo-red-option input{width:22px!important;height:22px!important;min-height:22px!important;flex:0 0 22px;margin:3px 0 0;accent-color:var(--primary)}
+.meter-photo-modal :is(#photo-detection,#photo-processing){font-size:14px;line-height:1.6}
+#photo-regions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+#photo-regions:empty{display:none}#photo-regions .button{flex:1;min-width:100px}
+#photo-regions [aria-pressed=true]{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+html[data-view-mode=comfortable] .photo-red-option{font-size:18px;padding:16px}
+html[data-view-mode=comfortable] .photo-red-option input{width:26px!important;height:26px!important;min-height:26px!important;flex-basis:26px}
 html[data-view-mode=comfortable] .meter-photo-button{font-size:18px;min-height:54px;margin-bottom:10px;padding:12px;gap:10px}
 html[data-view-mode=comfortable] .meter-photo-button .icon{height:22px;width:22px}
 html[data-view-mode=comfortable] .meter-photo-modal :is(p,.button){font-size:18px;line-height:1.7}

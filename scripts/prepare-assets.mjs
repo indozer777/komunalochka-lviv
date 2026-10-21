@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 const root = new URL('../', import.meta.url);
 await mkdir(new URL('public/', root), { recursive: true });
-for (const file of ['app.js', 'styles.css', 'favicon.svg', 'premium.js', 'admin-panel.js', 'admin.css', 'view-mode.js', 'view-mode.css', 'email-account.css', 'motion.js', 'motion.css', 'meter-ocr-core.js', 'meter-photo.js', 'meter-photo.css', 'telegram.js', 'telegram.css']) {
+for (const file of ['app.js', 'styles.css', 'favicon.svg', 'premium.js', 'admin-panel.js', 'admin.css', 'view-mode.js', 'view-mode.css', 'email-account.css', 'motion.js', 'motion.css', 'meter-ocr-core.js', 'meter-vision-core.js', 'meter-vision-worker.js', 'meter-photo.js', 'meter-photo.css', 'telegram.js', 'telegram.css']) {
   await copyFile(new URL(file, root), new URL('public/' + file, root));
 }
 
